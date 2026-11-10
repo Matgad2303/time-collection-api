@@ -1,7 +1,7 @@
 // NEWS FLEX: edições semanais de notícias (gravadas por um processo automático)
 const router = require("express").Router();
-const { query } = require("../db");
-const { wrap } = require("../lib/http");
+const { query } = require("./db");
+const { wrap } = require("./http");
 
 router.get("/", wrap(async (req, res) => {
   const edition = req.query.edition || null;

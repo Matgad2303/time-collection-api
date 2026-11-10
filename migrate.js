@@ -1,13 +1,13 @@
-// Aplica, em ordem, os arquivos .sql de db/migrations que ainda não rodaram
+// Aplica, em ordem, os arquivos .sql desta pasta que ainda não rodaram
 require("dotenv").config();
 const fs = require("fs");
 const path = require("path");
-const { pool } = require("../src/db");
+const { pool } = require("./db");
 
 (async () => {
   await pool.query("create table if not exists schema_migrations (name text primary key, ran_at timestamptz default now())");
   const done = new Set((await pool.query("select name from schema_migrations")).rows.map(r => r.name));
-  const dir = path.join(__dirname, "..", "db", "migrations");
+  const dir = __dirname;
   for (const f of fs.readdirSync(dir).filter(f => f.endsWith(".sql")).sort()) {
     if (done.has(f)) continue;
     console.log("Aplicando", f);

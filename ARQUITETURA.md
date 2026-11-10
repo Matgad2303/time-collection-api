@@ -12,18 +12,20 @@
 - **Banco PostgreSQL puro.** Nenhuma regra de negócio fica no banco (sem triggers, funções ou políticas do Supabase). O Supabase é usado só como um Postgres gerenciado, então o banco pode ser trocado por qualquer outro Postgres mudando a `DATABASE_URL`.
 - **Login com JWT.** O usuário entra com e-mail e senha, recebe um token válido por 30 dias e o envia no cabeçalho `Authorization: Bearer <token>`.
 
-## Pastas
+## Arquivos
+
+Todos os arquivos ficam na raiz do repositório (para facilitar o envio pelo site do GitHub).
 
 ```
-src/
-  index.js          sobe o servidor, registra as rotas e o tratador de erros
-  db.js             conexão com o Postgres (pool) e atalhos query/one
-  lib/http.js       HttpError, wrap (rotas async), need (obrigatórios), pick (campos permitidos)
-  lib/auth.js       criação e verificação do token, requireAuth/optionalAuth
-  routes/           uma rota por área do app
-db/migrations/      arquivos .sql numerados, aplicados em ordem por scripts/migrate.js
-scripts/migrate.js  aplica as migrações pendentes e registra em schema_migrations
-render.yaml         descrição do serviço para o Render
+index.js        sobe o servidor, registra as rotas e o tratador de erros
+db.js           conexão com o Postgres (pool) e atalhos query/one
+http.js         HttpError, wrap (rotas async), need (obrigatórios), pick (campos permitidos)
+authlib.js      criação e verificação do token, requireAuth/optionalAuth
+auth.js, users.js, watches.js, communities.js, market.js, hunts.js, news.js
+                uma rota por área do app
+001_init.sql    estrutura do banco; migrações novas seguem a numeração (002_..., 003_...)
+migrate.js      aplica as migrações .sql pendentes e registra em schema_migrations
+render.yaml     descrição do serviço para o Render
 ```
 
 ## Tabelas

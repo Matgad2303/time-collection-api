@@ -1,8 +1,8 @@
 // ECONOMY Time: pedidos de busca ("caçador sob pedido") e radar de marcas
 const router = require("express").Router();
-const { query, one } = require("../db");
-const { wrap, need, HttpError } = require("../lib/http");
-const { requireAuth } = require("../lib/auth");
+const { query, one } = require("./db");
+const { wrap, need, HttpError } = require("./http");
+const { requireAuth } = require("./authlib");
 
 router.use(requireAuth);
 

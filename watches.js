@@ -1,7 +1,7 @@
 const router = require("express").Router();
-const { query, one } = require("../db");
-const { wrap, need, HttpError, pick } = require("../lib/http");
-const { requireAuth } = require("../lib/auth");
+const { query, one } = require("./db");
+const { wrap, need, HttpError, pick } = require("./http");
+const { requireAuth } = require("./authlib");
 
 // Campos que o dono pode gravar num relógio
 const FIELDS = ["name", "brand", "model_ref", "movement", "shape", "case_material", "dial", "status", "wish_tier",

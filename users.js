@@ -1,7 +1,7 @@
 const router = require("express").Router();
-const { query, one } = require("../db");
-const { wrap, HttpError, pick } = require("../lib/http");
-const { requireAuth } = require("../lib/auth");
+const { query, one } = require("./db");
+const { wrap, HttpError, pick } = require("./http");
+const { requireAuth } = require("./authlib");
 const { publicUser } = require("./auth");
 
 // Busca de pessoas por @ (por enquanto só por @)

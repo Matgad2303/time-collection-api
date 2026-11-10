@@ -1,8 +1,8 @@
 // Trades & Deals: anúncios de venda/troca vindos da coleção + promoções publicadas pelos usuários
 const router = require("express").Router();
-const { query, one } = require("../db");
-const { wrap, need, HttpError } = require("../lib/http");
-const { requireAuth } = require("../lib/auth");
+const { query, one } = require("./db");
+const { wrap, need, HttpError } = require("./http");
+const { requireAuth } = require("./authlib");
 
 // Vitrine pública de relógios à venda ou troca
 router.get("/listings", wrap(async (req, res) => {

@@ -24,6 +24,6 @@ O arquivo `render.yaml` já descreve o serviço. No Render: New > Blueprint > es
 
 ## Documentação
 
-- [docs/ARQUITETURA.md](docs/ARQUITETURA.md): como o sistema é organizado
-- [docs/FUNCIONALIDADES.md](docs/FUNCIONALIDADES.md): o que o app faz e quais rotas atendem cada parte
-- [docs/PADROES.md](docs/PADROES.md): regras de código para quem for mexer
+- [ARQUITETURA.md](ARQUITETURA.md): como o sistema é organizado
+- [FUNCIONALIDADES.md](FUNCIONALIDADES.md): o que o app faz e quais rotas atendem cada parte
+- [PADROES.md](PADROES.md): regras de código para quem for mexer

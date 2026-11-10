@@ -14,13 +14,13 @@ app.get("/health", async (_req, res) => {
   catch { res.status(503).json({ ok: false, db: false }); }
 });
 
-app.use("/auth", require("./routes/auth").router);
-app.use("/users", require("./routes/users"));
-app.use("/watches", require("./routes/watches"));
-app.use("/communities", require("./routes/communities"));
-app.use("/market", require("./routes/market"));
-app.use("/hunts", require("./routes/hunts"));
-app.use("/news", require("./routes/news"));
+app.use("/auth", require("./auth").router);
+app.use("/users", require("./users"));
+app.use("/watches", require("./watches"));
+app.use("/communities", require("./communities"));
+app.use("/market", require("./market"));
+app.use("/hunts", require("./hunts"));
+app.use("/news", require("./news"));
 
 app.use((_req, res) => res.status(404).json({ error: "Rota não encontrada." }));
 

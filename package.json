@@ -2,13 +2,13 @@
   "name": "time-collection-api",
   "version": "0.1.0",
   "description": "API do Time Collection: coleção, comunidades, mercado e radar de relógios.",
-  "main": "src/index.js",
+  "main": "index.js",
   "type": "commonjs",
   "engines": { "node": ">=20" },
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "node --watch src/index.js",
-    "migrate": "node scripts/migrate.js"
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "migrate": "node migrate.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
