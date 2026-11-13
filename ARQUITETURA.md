@@ -39,7 +39,7 @@ smoke.js        teste de ponta a ponta das rotas (npm run smoke)
 | Tabela | Para que serve |
 |---|---|
 | users | contas, @, cidade, WhatsApp e se o perfil é público |
-| watches | relógios do usuário: coleção, a caminho, Wish Time, saiu; venda/troca |
+| watches | relógios do usuário: coleção, a caminho, Wish Time, saiu; situação no Trades & Deals e preço médio de mercado |
 | watch_history | linha do tempo de cada relógio |
 | communities, community_members | comunidades (ex.: Relógios Fortaleza) e quem participa (membro/admin) |
 | posts | mural de cada comunidade |
@@ -59,6 +59,7 @@ Rodam dentro da própria API (`agents.js`), sem serviço extra, e usam o Claude 
 | Caçador sob pedido | na hora em que a pessoa pede, e a cada 2 min para pendentes | pesquisa anúncios reais no Brasil e grava em `hunt_results` |
 | Radar de marcas | conferido a cada 6 h e quando a API acorda; 1 vez por semana por pessoa | cria um pedido do caçador (`source = radar`) com as marcas do radar |
 | NEWS FLEX | conferido a cada 6 h e quando a API acorda; 1 vez por semana | monta a edição da semana (5 a 10 notícias) em `news` |
+| Preço médio | na hora em que um relógio vai para à venda/recebendo propostas, ou quando a pessoa pede | pesquisa anúncios do mesmo modelo e grava o preço médio em `watches.market_*` (com 3+ anúncios, usa a média deles) |
 
 Como cada agente funciona: o Claude pesquisa (`web_search`) e lê páginas (`web_fetch`), e termina chamando uma ferramenta "entregar" com esquema estrito. O código valida os links (só http/https) e grava. Se der erro, o pedido volta para a fila e tenta até 3 vezes; depois fica `failed` e a pessoa pode tentar de novo. Pedidos presos em `working` por mais de 20 min voltam para a fila sozinhos. Cada execução fica em `agent_runs`, visível no painel de administração.
 

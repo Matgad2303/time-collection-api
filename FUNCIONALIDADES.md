@@ -28,13 +28,15 @@ O contato entre colecionadores é pelo botão de WhatsApp, montado no front com 
 | Método | Rota | O que faz |
 |---|---|---|
 | GET | /watches | meus relógios (`?status=wish` para o Wish Time) |
-| POST | /watches | adiciona relógio |
+| POST | /watches | adiciona relógio (se já entrar à venda ou recebendo propostas, pede o preço médio) |
 | GET | /watches/:id | detalhes e linha do tempo |
-| PATCH | /watches/:id | edita; mudança de status entra na linha do tempo |
+| PATCH | /watches/:id | edita; mudanças de status e de situação no Trades & Deals entram na linha do tempo |
+| POST | /watches/:id/price-check | recalcula o preço médio de mercado (até 10 por dia) |
 | DELETE | /watches/:id | remove |
 
 Status: `collection` (na coleção), `on_the_way` (a caminho), `wish` (Wish Time), `gone` (saiu).
-Venda: `sale_mode` = `none`, `sale`, `trade` ou `sale_or_trade`, com `sale_price` e `condition`.
+Trades & Deals: `sale_mode` = `none` (inegociável), `sale` (à venda) ou `offers` (recebendo propostas), mais `accepts_trade` (aceita troca), `sale_price` e `condition`.
+Ao colocar à venda ou recebendo propostas, o agente calcula o preço médio de mercado (`market_status`, `market_price`, `market_min`, `market_max`, `market_confidence`, `market_note`, `market_sources`). Se estiver à venda sem preço, o anúncio já sai com o preço médio. Marcar como `gone` (saiu) um relógio que estava à venda registra "Vendido / negociado" e volta para inegociável.
 
 ## Comunidades 🔒
 
@@ -53,7 +55,9 @@ Venda: `sale_mode` = `none`, `sale`, `trade` ou `sale_or_trade`, com `sale_price
 
 | Método | Rota | O que faz |
 |---|---|---|
-| GET | /market/listings | relógios à venda/troca de perfis públicos (`?brand=` busca na marca ou no nome, `?max=`) |
+| GET | /market/mine 🔒 | meus relógios (comigo ou a caminho) com situação e preço médio |
+| GET | /market/for-you 🔒 | indicações de outros colecionadores: Wish Time, radar, marcas que coleciono e minha cidade, com o motivo (`reason`) |
+| GET | /market/listings | anúncios de perfis públicos (`?brand=` marca ou modelo, `?max=`, `?mode=sale|offers`, `?trade=1`) |
 | GET | /market/promos | promoções válidas compartilhadas |
 | POST | /market/promos 🔒 | compartilha promoção (title, link https, store, price, valid_until) |
 | DELETE | /market/promos/:id 🔒 | remove a própria promoção |

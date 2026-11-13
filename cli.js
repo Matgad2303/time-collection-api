@@ -5,6 +5,7 @@
 //   npm run nova-senha -- email@ex.com      gera uma senha provisória para quem esqueceu
 //   npm run agente:cacador                  processa agora os pedidos pendentes do caçador
 //   npm run agente:news                     gera agora a edição da semana do NEWS FLEX (se ainda não existe)
+//   npm run agente:precos                   calcula agora os preços médios pendentes (Trades & Deals)
 //   npm run testar-ia                       faz uma busca real de teste (sem gravar nada) e mostra o custo
 require("dotenv").config();
 const crypto = require("crypto");
@@ -63,6 +64,10 @@ const commands = {
     for (const i of data.items) console.log(`- ${i.title} | ${i.store || "?"} | ${i.price ? "R$ " + i.price : i.price_text || "?"} | ${i.link}`);
     const cost = (usage.input_tokens * 4 + usage.output_tokens * 20) / 1e6 + usage.searches * 0.01;
     console.log(`\n${data.items.length} anúncio(s) em ${Math.round((Date.now() - t) / 1000)} s · ${usage.searches} pesquisa(s) · ${usage.input_tokens} tokens de entrada, ${usage.output_tokens} de saída · custo aproximado US$ ${cost.toFixed(3)} (preços do Opus 5.5)`);
+  },
+  async "agente:precos"() {
+    const n = await require("./agents").processPendingPrices(20);
+    console.log(`${n} preço(s) calculado(s).`);
   },
   async "agente:news"() {
     console.log(await require("./agents").runNews({ force: arg === "forcar" }));

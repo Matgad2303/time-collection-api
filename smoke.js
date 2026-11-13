@@ -49,10 +49,28 @@ async function call(method, path, body, expected) {
   await call("POST", "/watches", { name: "Tudor BB58", brand: "Tudor", status: "wish" }, 201);
   await call("GET", "/watches", null, 200);
   await call("GET", "/watches?status=wish", null, 200);
-  await call("PATCH", `/watches/${w.watch.id}`, { sale_mode: "sale", sale_price: 2500, condition: "usado" }, 200);
+  await call("PATCH", `/watches/${w.watch.id}`, { sale_mode: "trade" }, 400);
+  const onSale = await call("PATCH", `/watches/${w.watch.id}`, { sale_mode: "sale", sale_price: 2500, condition: "usado", accepts_trade: true }, 200);
+  if (health?.ai && onSale && !["pending", "working", "done"].includes(onSale.watch.market_status)) { failures++; console.log("FALHA colocar à venda deveria pedir o preço médio"); }
   await call("PATCH", `/watches/${w.watch.id}`, { status: "on_the_way" }, 200);
   const detail = await call("GET", `/watches/${w.watch.id}`, null, 200);
-  if (detail && detail.history.length !== 2) { failures++; console.log("FALHA linha do tempo deveria ter 2 itens"); }
+  if (detail && detail.history.length !== 3) { failures++; console.log("FALHA linha do tempo deveria ter 3 itens"); }
+  const mineT = await call("GET", "/market/mine", null, 200);
+  if (mineT && !mineT.watches.some((x) => x.id === w.watch.id && x.sale_mode === "sale")) { failures++; console.log("FALHA relógio à venda deveria aparecer em Meus trades"); }
+  await call("GET", "/market/for-you", null, 200);
+  if (WAIT_AGENTS) {
+    let st = "pending";
+    for (let i = 0; i < 60 && ["pending", "working"].includes(st); i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const d = await call("GET", `/watches/${w.watch.id}`, null, 200);
+      st = d?.watch.market_status;
+      if (st === "done") console.log(`     preço médio: R$ ${d.watch.market_price} (${d.watch.market_confidence}) · ${d.watch.market_note}`);
+    }
+    if (st !== "done") { failures++; console.log(`FALHA preço médio terminou com status ${st}`); }
+  }
+  // Colocado à venda sem preço: lança com o preço médio quando ele existir
+  const w2 = await call("POST", "/watches", { name: "Orient Bambino", brand: "Orient", estimate: 900, sale_mode: "offers" }, 201);
+  await call("DELETE", `/watches/${w2.watch.id}`, null, 204);
   await call("GET", "/watches/nao-e-uuid", null, 400);
 
   await call("GET", `/users?q=${handle.slice(0, 6)}`, null, 200);
@@ -72,6 +90,7 @@ async function call(method, path, body, expected) {
   await call("GET", `/communities/${c.community.id}/posts`, null, 403);
   await call("POST", `/communities/${c.community.id}/join`, null, 204);
 
+  await call("GET", "/market/listings?mode=offers&trade=1", null, 200);
   const listings = await call("GET", "/market/listings?brand=seiko", null, 200);
   if (listings && !listings.listings.some(l => l.id === w.watch.id)) { failures++; console.log("FALHA relógio à venda não apareceu na vitrine"); }
   await call("POST", "/market/promos", { title: "Promo", link: "http://inseguro.com" }, 400);

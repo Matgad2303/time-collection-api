@@ -24,7 +24,8 @@ router.get("/:handle", optionalAuth, wrap(async (req, res) => {
   const u = await one("select * from users where handle=$1", [req.params.handle.toLowerCase()]);
   if (!u || !u.is_public) throw new HttpError(404, "Perfil não encontrado.");
   const watches = await query(
-    `select id, name, brand, movement, shape, image_url, status, sale_mode, sale_price, condition
+    `select id, name, brand, model_ref, movement, shape, image_url, status, sale_mode, sale_price, condition,
+            accepts_trade, market_price
        from watches where user_id=$1 and status <> 'wish' and status <> 'gone' and (is_public or sale_mode <> 'none')
       order by (sale_mode <> 'none') desc, sort_order`, [u.id]
   );

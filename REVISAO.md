@@ -23,7 +23,7 @@ Revisão completa feita em 13/11/2026, área por área, com a API rodando num Po
 | Perfil e vitrine | ✅ pronto | vitrine pública, à venda primeiro, Wish Time e "saíram" nunca aparecem, botão de WhatsApp só para logados |
 | Pessoas | ✅ pronto | busca pelo nome ou pelo @ (antes era só pelo @) |
 | Comunidades | ✅ pronto | criar, filtrar por cidade, entrar, sair, mural só para membros, admin apaga posts; se o último admin sai, o membro mais antigo vira admin |
-| Trades & Deals | ✅ pronto | vitrine de quem vende/troca, filtro por marca agora acha por parte do nome ("seiko 5"), preço máximo, WhatsApp com mensagem pronta, promoções com link https, validade e remoção |
+| Trades & Deals | ✅ pronto (preço médio depende da chave da IA) | aba Meus: cada relógio Inegociável / À venda / Recebendo propostas, aceita troca, preço editável, "Vendi"; preço médio de mercado calculado pela IA e anúncio já sai com ele; aba Para você com indicações (Wish Time, radar, marcas, cidade) e o motivo; Explorar com filtros; aba Trades & Deals no perfil de cada colecionador; promoções |
 | ECONOMY: Caçador | ✅ pronto (falta a chave da IA) | pedido começa na hora, status "na fila / buscando / pronto / não deu certo", tela atualiza sozinha, tenta 3 vezes, botão tentar de novo, limite de 5 por dia e 3 ao mesmo tempo, aviso quando a IA está desligada |
 | ECONOMY: Radar | ✅ pronto (falta a chave da IA) | até 30 marcas com preço máximo; resultado semanal aparece como "Radar semanal" no caçador |
 | NEWS FLEX | ✅ pronto (falta a chave da IA) | edição semanal automática (5 a 10 notícias, uma principal), troca de edição, links só http/https |
@@ -31,6 +31,7 @@ Revisão completa feita em 13/11/2026, área por área, com a API rodando num Po
 | Administração | ✅ pronto | visão geral, relatos, agentes (status, custo, rodar agora, tentar de novo), senha provisória |
 | Privacidade | ✅ pronto | página explicando o que é guardado, quem vê, uso de IA e como excluir |
 | App no celular (PWA) | ✅ pronto | instala no Android e no iPhone, ícone próprio, abre em tela cheia |
+| Cores por área | ✅ pronto | NEWS FLEX claro (branco/bege e dourado), Economy azul-marinho com branco, Trades & Deals verde; o resto no preto e dourado |
 
 ## Área de relatos
 

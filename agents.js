@@ -2,8 +2,9 @@
 //   Caçador sob pedido  procura anúncios reais para cada pedido em hunts e grava em hunt_results
 //   Radar de marcas     uma vez por semana, cria um pedido do caçador com as marcas do radar de cada pessoa
 //   NEWS FLEX           uma vez por semana, monta a edição de notícias em news
+//   Preço médio         calcula o preço médio de mercado de um relógio (Trades & Deals)
 // Rodam dentro da própria API (startAgents), sem serviço extra. Também podem ser chamados pelo
-// painel de administração ou pelo terminal (npm run agente:caçador / npm run agente:news).
+// painel de administração ou pelo terminal (npm run agente:cacador / agente:news / agente:precos).
 const { pool, query, one } = require("./db");
 const { research, aiEnabled } = require("./ai");
 
@@ -260,6 +261,123 @@ async function runNews({ force = false } = {}) {
   }
 }
 
+// ---------- Preço médio de mercado (Trades & Deals) ----------
+
+const PRICE_TOOL = {
+  name: "entregar_preco",
+  description: "Entrega a avaliação de preço de mercado do relógio. Chame uma única vez, no final.",
+  input_schema: {
+    type: "object",
+    additionalProperties: false,
+    required: ["average", "min", "max", "confidence", "note", "sources"],
+    properties: {
+      average: { type: ["integer", "null"], description: "Preço médio de mercado no Brasil, em reais inteiros. Nulo se não houver base para estimar." },
+      min: { type: ["integer", "null"], description: "Menor preço razoável encontrado (ignore valores absurdos)" },
+      max: { type: ["integer", "null"], description: "Maior preço razoável encontrado" },
+      confidence: { type: "string", enum: ["alta", "media", "baixa"], description: "alta: 5 ou mais anúncios comparáveis; media: 2 a 4; baixa: poucos dados ou só referências indiretas" },
+      note: { type: "string", description: "Uma frase em português explicando a base da estimativa (ex.: 'média de 6 anúncios de usados com caixa')." },
+      sources: {
+        type: "array",
+        description: "Até 6 anúncios usados como base, com links reais encontrados na pesquisa.",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["title", "store", "price", "link"],
+          properties: {
+            title: { type: "string" },
+            store: { type: ["string", "null"] },
+            price: { type: ["integer", "null"], description: "Preço em reais inteiros" },
+            link: { type: "string", description: "Endereço https do anúncio" },
+          },
+        },
+      },
+    },
+  },
+};
+
+const PRICE_SYSTEM = `Você é o avaliador de preços do Time Collection, um app brasileiro para colecionadores de relógios.
+Sua tarefa é estimar o preço médio de mercado, no Brasil e hoje, de um relógio específico, para o dono anunciar com um preço justo.
+
+Regras:
+- Pesquise anúncios atuais do mesmo modelo (mesma referência quando informada) em marketplaces e lojas brasileiras (Mercado Livre, OLX, Enjoei, lojas e revendedores, Chrono24 com preço em reais ou envio ao Brasil).
+- Compare com o estado informado: um usado deve ser comparado com usados; se só houver novos, desconte e explique na nota.
+- Ignore réplicas, anúncios de peças/pulseiras e preços absurdos.
+- Nunca invente anúncio, preço ou link. Se não achar base, devolva average nulo e explique.
+- Preços em reais, números inteiros.
+- Termine sempre chamando a ferramenta entregar_preco.`;
+
+const describeWatch = (w) => [
+  `Relógio: ${w.name}`,
+  w.brand && `Marca: ${w.brand}`,
+  w.model_ref && `Referência: ${w.model_ref}`,
+  w.movement && `Movimento: ${w.movement}`,
+  w.case_material && `Caixa: ${w.case_material}`,
+  w.dial && `Mostrador: ${w.dial}`,
+  `Estado: ${w.condition || "usado (não informado)"}`,
+].filter(Boolean).join("\n");
+
+// Preço médio: com 3+ anúncios usa a média deles (tirando o mais caro e o mais barato se houver 5+);
+// com menos, usa a estimativa do agente
+function averageFrom(data) {
+  const prices = (data.sources || []).map((s) => int(s.price)).filter((v) => v && v > 0).sort((a, b) => a - b);
+  if (prices.length >= 3) {
+    const trimmed = prices.length >= 5 ? prices.slice(1, -1) : prices;
+    return Math.round(trimmed.reduce((a, b) => a + b, 0) / trimmed.length);
+  }
+  return int(data.average);
+}
+
+async function runPriceCheck(watchId) {
+  const w = await one(
+    `update watches set market_status='working', market_started_at=now(), market_attempts=market_attempts+1, market_error=null
+      where id=$1 and market_status='pending' returning *`, [watchId]);
+  if (!w) return null;
+  const startedAt = new Date();
+  try {
+    const { data, usage } = await research({
+      system: PRICE_SYSTEM, tool: PRICE_TOOL, maxSearches: 6, maxFetches: 3,
+      prompt: `Avalie o preço de mercado deste relógio:\n${describeWatch(w)}`,
+      fake: () => {
+        const base = w.estimate || w.price_paid || 3000;
+        return {
+          average: base, min: Math.round(base * 0.85), max: Math.round(base * 1.15), confidence: "media",
+          note: "Estimativa de teste (modo AI_FAKE).",
+          sources: [0.9, 1, 1.1].map((f, i) => ({ title: `${w.name} (exemplo ${i + 1})`, store: "Exemplo", price: Math.round(base * f), link: `https://example.com/preco-${i + 1}` })),
+        };
+      },
+    });
+    const sources = (Array.isArray(data.sources) ? data.sources : [])
+      .map((s) => ({ title: text(s.title, 160), store: text(s.store, 60), price: int(s.price), link: httpUrl(s.link) }))
+      .filter((s) => s.title && s.link).slice(0, 6);
+    const avg = averageFrom({ ...data, sources });
+    const confidence = ["alta", "media", "baixa"].includes(data.confidence) ? data.confidence : "baixa";
+    // Se o relógio está à venda sem preço, já lança com o preço médio
+    await query(
+      `update watches set market_status='done', market_price=$2, market_min=$3, market_max=$4, market_confidence=$5,
+              market_note=$6, market_sources=$7, market_checked_at=now(),
+              sale_price=case when sale_mode='sale' and sale_price is null then $2 else sale_price end
+        where id=$1`,
+      [w.id, avg, int(data.min), int(data.max), confidence, text(data.note, 300), JSON.stringify(sources)]);
+    await recordRun("price", w.id, "ok", avg ? `preço médio ${brl(avg)}` : "sem base para estimar", usage, startedAt);
+    log(`preço: ${w.name} → ${avg ? brl(avg) : "sem estimativa"}`);
+    return avg;
+  } catch (e) {
+    const giveUp = w.market_attempts >= MAX_ATTEMPTS;
+    await query(`update watches set market_status=$2, market_error=$3 where id=$1`,
+      [w.id, giveUp ? "failed" : "pending", String(e.message).slice(0, 500)]);
+    await recordRun("price", w.id, "error", e.message, {}, startedAt);
+    console.error("[agentes] preço falhou", w.id, e.message);
+    return null;
+  }
+}
+
+async function processPendingPrices(limit = 5) {
+  await query(`update watches set market_status='pending' where market_status='working' and market_started_at < now() - interval '20 minutes'`);
+  const pending = await query(`select id from watches where market_status='pending' order by updated_at limit $1`, [limit]);
+  for (const p of pending) await runPriceCheck(p.id);
+  return pending.length;
+}
+
 // ---------- Agendador ----------
 
 let busy = false;
@@ -268,6 +386,7 @@ async function tick({ weekly = false } = {}) {
   busy = true;
   try {
     if (weekly) { await scheduleRadarHunts(); await runNews(); }
+    await processPendingPrices();
     await processPendingHunts();
   } catch (e) {
     console.error("[agentes] erro no ciclo", e.message);
@@ -286,10 +405,17 @@ function startAgents() {
   setInterval(() => tick({ weekly: true }), 6 * 60 * 60 * 1000).unref();
 }
 
-// Chamado logo depois de um pedido novo, para não esperar o próximo ciclo
-const kickHunts = () => { if (aiEnabled() && process.env.AGENTS_DISABLED !== "true") setImmediate(() => tick()); };
+// Chamado logo depois de um pedido novo (busca ou preço), para não esperar o próximo ciclo.
+// Se um ciclo já estiver rodando, marca para rodar de novo assim que ele terminar.
+let again = false;
+const kickHunts = () => {
+  if (!aiEnabled() || process.env.AGENTS_DISABLED === "true") return;
+  if (busy) { again = true; return; }
+  setImmediate(async () => { do { again = false; await tick(); } while (again); });
+};
 
 module.exports = {
   startAgents, kickHunts, runHunt, processPendingHunts, scheduleRadarHunts, runNews, currentEdition,
+  runPriceCheck, processPendingPrices,
   HUNT_SYSTEM, HUNT_TOOL, huntPrompt,
 };
