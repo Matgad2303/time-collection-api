@@ -2,20 +2,25 @@
 const router = require("express").Router();
 const { query, one } = require("./db");
 const { wrap, need, HttpError } = require("./http");
-const { requireAuth } = require("./authlib");
+const { requireAuth, optionalAuth } = require("./authlib");
 
 // Vitrine pública de relógios à venda ou troca
-router.get("/listings", wrap(async (req, res) => {
+router.get("/listings", optionalAuth, wrap(async (req, res) => {
   const params = [];
   let where = "w.sale_mode <> 'none' and w.status in ('collection','on_the_way') and u.is_public";
-  if (req.query.brand) { params.push(req.query.brand); where += ` and lower(w.brand)=lower($${params.length})`; }
+  if (req.query.brand) {
+    // Busca por parte da marca ou do nome (ex.: "seiko 5" acha "Seiko 5 Sports SRPD")
+    params.push("%" + String(req.query.brand).trim().replace(/[%_\\]/g, "") + "%");
+    where += ` and (w.brand ilike $${params.length} or w.name ilike $${params.length})`;
+  }
   if (req.query.max) { params.push(Number(req.query.max)); where += ` and w.sale_price <= $${params.length}`; }
   const rows = await query(
     `select w.id, w.name, w.brand, w.movement, w.image_url, w.sale_mode, w.sale_price, w.condition,
             u.handle, u.name as owner_name, u.city, u.whatsapp
        from watches w join users u on u.id=w.user_id
       where ${where} order by w.updated_at desc limit 200`, params);
-  res.json({ listings: rows });
+  // O WhatsApp só aparece para quem está logado
+  res.json({ listings: req.user ? rows : rows.map((r) => ({ ...r, whatsapp: null })) });
 }));
 
 // Promoções (links de lojas) compartilhadas pela comunidade

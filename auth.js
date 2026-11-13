@@ -10,6 +10,9 @@ const publicUser = (u) => ({
   avatar_url: u.avatar_url, whatsapp: u.whatsapp, is_public: u.is_public, created_at: u.created_at,
 });
 
+// Dados da própria conta: os públicos + se é administrador
+const ownUser = (u) => ({ ...publicUser(u), is_admin: Boolean(u.is_admin) });
+
 // Cadastro
 router.post("/register", wrap(async (req, res) => {
   need(req.body, ["email", "password", "handle", "name"]);
@@ -24,7 +27,7 @@ router.post("/register", wrap(async (req, res) => {
     `insert into users (email, password_hash, handle, name, city) values ($1,$2,$3,$4,$5) returning *`,
     [email, hash, handle, String(req.body.name).trim(), req.body.city || null]
   );
-  res.status(201).json({ token: signToken(u), user: publicUser(u) });
+  res.status(201).json({ token: signToken(u), user: ownUser(u) });
 }));
 
 // Login
@@ -34,14 +37,26 @@ router.post("/login", wrap(async (req, res) => {
   if (!u || !(await bcrypt.compare(String(req.body.password), u.password_hash))) {
     throw new HttpError(401, "E-mail ou senha incorretos.");
   }
-  res.json({ token: signToken(u), user: publicUser(u) });
+  res.json({ token: signToken(u), user: ownUser(u) });
 }));
 
 // Quem sou eu
 router.get("/me", requireAuth, wrap(async (req, res) => {
   const u = await one("select * from users where id=$1", [req.user.id]);
   if (!u) throw new HttpError(404, "Conta não encontrada.");
-  res.json({ user: publicUser(u) });
+  res.json({ user: ownUser(u) });
 }));
 
-module.exports = { router, publicUser };
+// Trocar a senha (pede a atual)
+router.post("/password", requireAuth, wrap(async (req, res) => {
+  need(req.body, ["current_password", "new_password"]);
+  if (String(req.body.new_password).length < 8) throw new HttpError(400, "A nova senha precisa ter pelo menos 8 caracteres.");
+  const u = await one("select * from users where id=$1", [req.user.id]);
+  if (!u || !(await bcrypt.compare(String(req.body.current_password), u.password_hash))) {
+    throw new HttpError(401, "Senha atual incorreta.");
+  }
+  await query("update users set password_hash=$2, updated_at=now() where id=$1", [u.id, await bcrypt.hash(String(req.body.new_password), 10)]);
+  res.status(204).end();
+}));
+
+module.exports = { router, publicUser, ownUser };

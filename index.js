@@ -4,6 +4,7 @@ const cors = require("cors");
 const { pool } = require("./db");
 
 const { rateLimit } = require("./http");
+const { aiEnabled } = require("./ai");
 
 const app = express();
 app.disable("x-powered-by");
@@ -14,7 +15,7 @@ app.use(cors({ origin: origins.includes("*") ? "*" : origins }));
 
 // Saúde (usado pelo Render para saber se a API está no ar)
 app.get("/health", async (_req, res) => {
-  try { await pool.query("select 1"); res.json({ ok: true, db: true }); }
+  try { await pool.query("select 1"); res.json({ ok: true, db: true, ai: aiEnabled() }); }
   catch { res.status(503).json({ ok: false, db: false }); }
 });
 
@@ -28,6 +29,8 @@ app.use("/communities", require("./communities"));
 app.use("/market", require("./market"));
 app.use("/hunts", require("./hunts"));
 app.use("/news", require("./news"));
+app.use("/feedback", require("./feedback"));
+app.use("/admin", require("./admin"));
 
 app.use((_req, res) => res.status(404).json({ error: "Rota não encontrada." }));
 
@@ -58,6 +61,7 @@ app.use((err, _req, res, _next) => {
 if (require.main === module) {
   const port = process.env.PORT || 3001;
   const server = app.listen(port, () => console.log(`Time Collection API na porta ${port}`));
+  require("./agents").startAgents();
   // Desligamento limpo quando o Render reinicia o serviço
   process.on("SIGTERM", () => server.close(() => pool.end().then(() => process.exit(0))));
 }

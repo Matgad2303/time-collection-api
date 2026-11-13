@@ -2,7 +2,7 @@
 
 Back-end do Time Collection, o app para o universo da relojoaria: coleção, Wish Time, comunidades por cidade, Trades & Deals, ECONOMY Time (caçador sob pedido e radar de marcas) e NEWS FLEX.
 
-Stack: Node.js 20+, Express, PostgreSQL puro (sem lógica no banco), login com JWT.
+Stack: Node.js 20+, Express, PostgreSQL puro (sem lógica no banco), login com JWT, agentes de IA com o Claude (Anthropic).
 
 ## Rodar no computador
 
@@ -30,3 +30,14 @@ Passo a passo completo (banco, API, site e app): [DEPLOY.md](DEPLOY.md).
 - [FUNCIONALIDADES.md](FUNCIONALIDADES.md): o que o app faz e quais rotas atendem cada parte
 - [PADROES.md](PADROES.md): regras de código para quem for mexer
 - [DEPLOY.md](DEPLOY.md): como colocar tudo no ar
+- [REVISAO.md](REVISAO.md): revisão área por área antes do lançamento e o que fica para depois
+
+## Comandos úteis
+
+| Comando | Para quê |
+|---|---|
+| `npm run relatos` | lista os relatos em aberto (para ler ou colar numa conversa com o Claude) |
+| `npm run tornar-admin -- email` | dá acesso ao painel de administração |
+| `npm run nova-senha -- email` | senha provisória para quem esqueceu |
+| `npm run testar-ia` | uma busca real do caçador, sem gravar, mostrando o custo |
+| `npm run agente:cacador` / `npm run agente:news` | roda os agentes na hora |

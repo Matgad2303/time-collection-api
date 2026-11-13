@@ -15,3 +15,8 @@ services:
         generateValue: true
       - key: CORS_ORIGIN
         sync: false
+      # Agentes de IA (Caçador, Radar, NEWS FLEX). Sem a chave, o app funciona e os agentes ficam desligados.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: HUNTS_PER_DAY
+        value: "5"

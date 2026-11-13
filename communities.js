@@ -45,6 +45,11 @@ router.post("/:id/join", wrap(async (req, res) => {
 
 router.post("/:id/leave", wrap(async (req, res) => {
   await query(`delete from community_members where community_id=$1 and user_id=$2`, [req.params.id, req.user.id]);
+  // Se ficou sem admin, o membro mais antigo vira admin
+  await query(
+    `update community_members set role='admin'
+      where community_id=$1 and not exists (select 1 from community_members where community_id=$1 and role='admin')
+        and user_id=(select user_id from community_members where community_id=$1 order by joined_at limit 1)`, [req.params.id]);
   res.status(204).end();
 }));
 

@@ -1,17 +1,26 @@
 {
   "name": "time-collection-api",
-  "version": "0.1.0",
-  "description": "API do Time Collection: coleção, comunidades, mercado e radar de relógios.",
+  "version": "0.2.0",
+  "description": "API do Time Collection: coleção, comunidades, mercado, agentes de IA e relatos.",
   "main": "index.js",
   "type": "commonjs",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node index.js",
     "dev": "node --watch index.js",
     "migrate": "node migrate.js",
-    "smoke": "node smoke.js"
+    "smoke": "node smoke.js",
+    "relatos": "node cli.js relatos",
+    "tornar-admin": "node cli.js tornar-admin",
+    "nova-senha": "node cli.js nova-senha",
+    "agente:cacador": "node cli.js agente:cacador",
+    "agente:news": "node cli.js agente:news",
+    "testar-ia": "node cli.js testar-ia"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

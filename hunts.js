@@ -3,6 +3,12 @@ const router = require("express").Router();
 const { query, one } = require("./db");
 const { wrap, need, HttpError } = require("./http");
 const { requireAuth } = require("./authlib");
+const { aiEnabled } = require("./ai");
+const { kickHunts } = require("./agents");
+
+// Limites para controlar o custo dos agentes
+const HUNTS_PER_DAY = Number(process.env.HUNTS_PER_DAY || 5);
+const MAX_OPEN_HUNTS = 3;
 
 router.use(requireAuth);
 
@@ -11,16 +17,37 @@ router.get("/", wrap(async (req, res) => {
   const hunts = await query("select * from hunts where user_id=$1 order by created_at desc limit 50", [req.user.id]);
   const ids = hunts.map(h => h.id);
   const items = ids.length ? await query("select * from hunt_results where hunt_id = any($1) order by price nulls last", [ids]) : [];
-  res.json({ hunts: hunts.map(h => ({ ...h, items: items.filter(i => i.hunt_id === h.id) })) });
+  res.json({
+    // O erro técnico fica só no painel de administração
+    hunts: hunts.map(({ error, ...h }) => ({ ...h, items: items.filter(i => i.hunt_id === h.id) })),
+    ai_enabled: aiEnabled(),
+    limit_per_day: HUNTS_PER_DAY,
+  });
 }));
 
 // Novo pedido (status pending; um processo externo preenche os resultados)
 router.post("/", wrap(async (req, res) => {
   need(req.body, ["query"]);
   const cond = ["novo", "usado", "tanto faz"].includes(req.body.condition) ? req.body.condition : "tanto faz";
+  const { today, open } = await one(
+    `select count(*) filter (where created_at > now() - interval '24 hours')::int as today,
+            count(*) filter (where status in ('pending','working'))::int as open
+       from hunts where user_id=$1 and source='user'`, [req.user.id]);
+  if (open >= MAX_OPEN_HUNTS) throw new HttpError(429, `Você já tem ${open} buscas em andamento. Espere uma terminar.`);
+  if (today >= HUNTS_PER_DAY) throw new HttpError(429, `Limite de ${HUNTS_PER_DAY} buscas por dia atingido. Tente amanhã.`);
   const h = await one(`insert into hunts (user_id, query, budget, condition) values ($1,$2,$3,$4) returning *`,
-    [req.user.id, String(req.body.query).slice(0, 120), req.body.budget || null, cond]);
-  res.status(201).json({ hunt: h });
+    [req.user.id, String(req.body.query).trim().slice(0, 120), req.body.budget || null, cond]);
+  kickHunts();
+  res.status(201).json({ hunt: { ...h, items: [] } });
+}));
+
+// Tentar de novo um pedido que falhou
+router.post("/:id/retry", wrap(async (req, res) => {
+  const h = await one(`update hunts set status='pending', attempts=0, error=null
+                        where id=$1 and user_id=$2 and status='failed' returning *`, [req.params.id, req.user.id]);
+  if (!h) throw new HttpError(404, "Pedido não encontrado ou não falhou.");
+  kickHunts();
+  res.json({ hunt: h });
 }));
 
 router.delete("/:id", wrap(async (req, res) => {

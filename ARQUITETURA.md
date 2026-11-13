@@ -21,8 +21,12 @@ index.js        sobe o servidor, registra as rotas e o tratador de erros
 db.js           conexão com o Postgres (pool) e atalhos query/one
 http.js         HttpError, wrap (rotas async), need (obrigatórios), pick (campos permitidos)
 authlib.js      criação e verificação do token, requireAuth/optionalAuth
-auth.js, users.js, watches.js, communities.js, market.js, hunts.js, news.js
+auth.js, users.js, watches.js, communities.js, market.js, hunts.js, news.js,
+feedback.js, admin.js
                 uma rota por área do app
+ai.js           conexão com o Claude: pesquisa na web e entrega o resultado num formato fixo
+agents.js       agentes de IA (Caçador, Radar, NEWS FLEX) e o agendador que roda dentro da API
+cli.js          comandos de terminal (relatos, tornar-admin, nova-senha, agentes, testar-ia)
 001_init.sql    estrutura do banco; migrações novas seguem a numeração (002_..., 003_...)
 migrate.js      aplica as migrações .sql pendentes e registra em schema_migrations
 render.yaml     descrição do serviço para o Render
@@ -43,7 +47,25 @@ smoke.js        teste de ponta a ponta das rotas (npm run smoke)
 | hunts, hunt_results | pedidos do caçador sob pedido e os anúncios encontrados |
 | radar_brands | marcas que o usuário acompanha e o preço máximo |
 | news | notícias do NEWS FLEX, agrupadas por edição semanal |
+| feedback | relatos enviados pelo app, com status e resposta da equipe |
+| agent_runs | cada execução dos agentes de IA (sucesso/erro, tokens, pesquisas) |
 
-## Processos automáticos
+## Agentes de IA
 
-O caçador sob pedido e o NEWS FLEX são alimentados por processos externos (rotinas agendadas) que gravam direto nas tabelas `hunt_results`/`hunts` e `news`. A API só lê esses dados e registra os pedidos.
+Rodam dentro da própria API (`agents.js`), sem serviço extra, e usam o Claude (Anthropic) com pesquisa na web. Ficam desligados enquanto `ANTHROPIC_API_KEY` não estiver configurada; o resto do app funciona normalmente.
+
+| Agente | Quando roda | O que faz |
+|---|---|---|
+| Caçador sob pedido | na hora em que a pessoa pede, e a cada 2 min para pendentes | pesquisa anúncios reais no Brasil e grava em `hunt_results` |
+| Radar de marcas | conferido a cada 6 h e quando a API acorda; 1 vez por semana por pessoa | cria um pedido do caçador (`source = radar`) com as marcas do radar |
+| NEWS FLEX | conferido a cada 6 h e quando a API acorda; 1 vez por semana | monta a edição da semana (5 a 10 notícias) em `news` |
+
+Como cada agente funciona: o Claude pesquisa (`web_search`) e lê páginas (`web_fetch`), e termina chamando uma ferramenta "entregar" com esquema estrito. O código valida os links (só http/https) e grava. Se der erro, o pedido volta para a fila e tenta até 3 vezes; depois fica `failed` e a pessoa pode tentar de novo. Pedidos presos em `working` por mais de 20 min voltam para a fila sozinhos. Cada execução fica em `agent_runs`, visível no painel de administração.
+
+Para desenvolver sem gastar: `AI_FAKE=true` faz os agentes devolverem dados fictícios.
+
+No plano gratuito do Render a API "dorme" sem uso; os agentes rodam quando ela está acordada. Como pedir uma busca acorda a API, o caçador funciona normalmente; o NEWS FLEX sai na primeira vez que alguém abrir o app na semana.
+
+## Relatos
+
+Qualquer pessoa, com ou sem login, envia relatos pelo app (ícone de bandeira no topo, links "Relatar" nas mensagens de erro, "Esqueci minha senha" na tela de entrar). O app anexa a tela, o aparelho, a versão e o último erro, e a pessoa vê tudo antes de enviar. A equipe lê e responde no painel `/admin` (ou com `npm run relatos` no terminal), e a resposta aparece para a pessoa em "Meus relatos".
