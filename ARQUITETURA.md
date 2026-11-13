@@ -4,7 +4,7 @@
 
 ```
 [time-collection-web]  --HTTPS/JSON-->  [time-collection-api]  --SQL-->  [PostgreSQL]
-   React (site/app)                       Node.js + Express                Supabase (só como banco)
+   React (site/app PWA)                   Node.js + Express                Supabase (só como banco)
    hospedado no Render                    hospedado no Render
 ```
 
@@ -26,6 +26,8 @@ auth.js, users.js, watches.js, communities.js, market.js, hunts.js, news.js
 001_init.sql    estrutura do banco; migrações novas seguem a numeração (002_..., 003_...)
 migrate.js      aplica as migrações .sql pendentes e registra em schema_migrations
 render.yaml     descrição do serviço para o Render
+smoke.js        teste de ponta a ponta das rotas (npm run smoke)
+.env.example    modelo das variáveis de ambiente
 ```
 
 ## Tabelas

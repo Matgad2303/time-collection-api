@@ -40,6 +40,7 @@ Venda: `sale_mode` = `none`, `sale`, `trade` ou `sale_or_trade`, com `sale_price
 |---|---|---|
 | GET | /communities | lista (`?city=Fortaleza`), com nº de membros e se participo |
 | POST | /communities | cria; quem cria vira admin |
+| GET | /communities/:id | detalhe, nº de membros e meu papel (`my_role`: member, admin ou null) |
 | POST | /communities/:id/join | entra |
 | POST | /communities/:id/leave | sai |
 | GET | /communities/:id/posts | mural (só membros) |
@@ -70,6 +71,10 @@ Venda: `sale_mode` = `none`, `sale`, `trade` ou `sale_or_trade`, com `sale_price
 | Método | Rota | O que faz |
 |---|---|---|
 | GET | /news | notícias da edição mais recente (`?edition=2026-W46` para outra) e lista de edições |
+
+## Limites
+
+Login: até 20 tentativas a cada 15 minutos por IP. Cadastro: até 10 por hora por IP. Acima disso a API responde 429.
 
 ## Saúde
 

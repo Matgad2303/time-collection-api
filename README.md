@@ -18,12 +18,15 @@ npm run dev
 
 A API sobe em `http://localhost:3001`. Teste em `http://localhost:3001/health`.
 
-## Publicar no Render
+Para testar todas as rotas de uma vez: `npm run smoke` (ou `npm run smoke -- https://endereco-da-api`). O teste cria um usuário com e-mail aleatório.
 
-O arquivo `render.yaml` já descreve o serviço. No Render: New > Blueprint > escolha este repositório. Preencha `DATABASE_URL` (do Supabase) e `CORS_ORIGIN` (endereço do site). O `JWT_SECRET` é gerado sozinho, e as migrações rodam a cada deploy.
+## Publicar
+
+Passo a passo completo (banco, API, site e app): [DEPLOY.md](DEPLOY.md).
 
 ## Documentação
 
 - [ARQUITETURA.md](ARQUITETURA.md): como o sistema é organizado
 - [FUNCIONALIDADES.md](FUNCIONALIDADES.md): o que o app faz e quais rotas atendem cada parte
 - [PADROES.md](PADROES.md): regras de código para quem for mexer
+- [DEPLOY.md](DEPLOY.md): como colocar tudo no ar

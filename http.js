@@ -25,4 +25,21 @@ function pick(obj, fields) {
   return out;
 }
 
-module.exports = { HttpError, wrap, need, pick };
+// Limite simples de requisições por IP, em memória (suficiente para uma instância só)
+function rateLimit({ windowMs, max }) {
+  const hits = new Map();
+  setInterval(() => {
+    const now = Date.now();
+    for (const [ip, h] of hits) if (h.reset <= now) hits.delete(ip);
+  }, windowMs).unref();
+  return (req, _res, next) => {
+    const now = Date.now();
+    let h = hits.get(req.ip);
+    if (!h || h.reset <= now) { h = { count: 0, reset: now + windowMs }; hits.set(req.ip, h); }
+    h.count++;
+    if (h.count > max) return next(new HttpError(429, "Muitas tentativas. Espere alguns minutos e tente de novo."));
+    next();
+  };
+}
+
+module.exports = { HttpError, wrap, need, pick, rateLimit };

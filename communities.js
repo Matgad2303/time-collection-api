@@ -19,11 +19,21 @@ router.get("/", wrap(async (req, res) => {
   res.json({ communities: rows });
 }));
 
+// Detalhe: dados da comunidade, nº de membros e meu papel (null se não participo)
+router.get("/:id", wrap(async (req, res) => {
+  const c = await one(
+    `select c.*, (select count(*) from community_members m where m.community_id=c.id)::int as members,
+            (select role from community_members m where m.community_id=c.id and m.user_id=$2) as my_role
+       from communities c where c.id=$1`, [req.params.id, req.user.id]);
+  if (!c) throw new HttpError(404, "Comunidade não encontrada.");
+  res.json({ community: { ...c, joined: Boolean(c.my_role) } });
+}));
+
 // Criar (quem cria vira admin)
 router.post("/", wrap(async (req, res) => {
   need(req.body, ["name"]);
   const c = await one(`insert into communities (name, city, description, created_by) values ($1,$2,$3,$4) returning *`,
-    [req.body.name.trim(), req.body.city || null, req.body.description || null, req.user.id]);
+    [String(req.body.name).trim().slice(0, 80), req.body.city || null, req.body.description || null, req.user.id]);
   await query(`insert into community_members (community_id, user_id, role) values ($1,$2,'admin')`, [c.id, req.user.id]);
   res.status(201).json({ community: c });
 }));

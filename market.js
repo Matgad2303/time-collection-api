@@ -7,7 +7,7 @@ const { requireAuth } = require("./authlib");
 // Vitrine pública de relógios à venda ou troca
 router.get("/listings", wrap(async (req, res) => {
   const params = [];
-  let where = "w.sale_mode <> 'none' and u.is_public";
+  let where = "w.sale_mode <> 'none' and w.status in ('collection','on_the_way') and u.is_public";
   if (req.query.brand) { params.push(req.query.brand); where += ` and lower(w.brand)=lower($${params.length})`; }
   if (req.query.max) { params.push(Number(req.query.max)); where += ` and w.sale_price <= $${params.length}`; }
   const rows = await query(
@@ -28,10 +28,10 @@ router.get("/promos", wrap(async (_req, res) => {
 
 router.post("/promos", requireAuth, wrap(async (req, res) => {
   need(req.body, ["title", "link"]);
-  if (!/^https:\/\//.test(req.body.link)) throw new HttpError(400, "O link precisa começar com https://");
+  if (!/^https:\/\/\S+$/.test(String(req.body.link))) throw new HttpError(400, "O link precisa começar com https://");
   const p = await one(
     `insert into promos (user_id, title, store, price, link, valid_until) values ($1,$2,$3,$4,$5,$6) returning *`,
-    [req.user.id, req.body.title, req.body.store || null, req.body.price || null, req.body.link, req.body.valid_until || null]);
+    [req.user.id, String(req.body.title).slice(0, 160), req.body.store || null, req.body.price || null, req.body.link, req.body.valid_until || null]);
   res.status(201).json({ promo: p });
 }));
 
