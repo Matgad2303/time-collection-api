@@ -5,7 +5,7 @@
 //   npm run nova-senha -- email@ex.com      gera uma senha provisória para quem esqueceu
 //   npm run agente:cacador                  processa agora os pedidos pendentes do caçador
 //   npm run agente:news                     gera agora a edição da semana do NEWS FLEX (se ainda não existe)
-//   npm run agente:precos                   calcula agora os preços médios pendentes (Trades & Deals)
+//   npm run importar -- arquivo.json email  importa a coleção exportada do protótipo para uma conta
 //   npm run testar-ia                       faz uma busca real de teste (sem gravar nada) e mostra o custo
 require("dotenv").config();
 const crypto = require("crypto");
@@ -46,8 +46,7 @@ const commands = {
     console.log(u ? `Senha provisória de @${u.handle}: ${temp}\nPeça para a pessoa trocar em Minha conta > Trocar senha.` : "Nenhuma conta com esse e-mail.");
   },
   async "agente:cacador"() {
-    const n = await require("./agents").processPendingHunts(20);
-    console.log(`${n} pedido(s) processado(s).`);
+    console.log(await require("./agents").processHunts());
   },
   async "testar-ia"() {
     const { research, aiEnabled, MODEL, FAKE } = require("./ai");
@@ -57,17 +56,13 @@ const commands = {
     const t = Date.now();
     const { data, usage } = await research({
       system: agents.HUNT_SYSTEM, tool: agents.HUNT_TOOL,
-      prompt: agents.huntPrompt({ source: "user", query: arg || "Seiko 5 Sports SRPD", budget: 2500, condition: "tanto faz" }, []),
-      fake: () => ({ summary: "modo de teste", items: [] }),
+      prompt: `Relógio: "${arg || "Seiko 5 Sports SRPD"}". Orçamento: até R$ 2.500. Condição: tanto faz.`,
+      fake: () => ({ note: "modo de teste", items: [] }),
     });
-    console.log(`\nResumo: ${data.summary}`);
+    console.log(`\nResumo: ${data.note}`);
     for (const i of data.items) console.log(`- ${i.title} | ${i.store || "?"} | ${i.price ? "R$ " + i.price : i.price_text || "?"} | ${i.link}`);
     const cost = (usage.input_tokens * 4 + usage.output_tokens * 20) / 1e6 + usage.searches * 0.01;
     console.log(`\n${data.items.length} anúncio(s) em ${Math.round((Date.now() - t) / 1000)} s · ${usage.searches} pesquisa(s) · ${usage.input_tokens} tokens de entrada, ${usage.output_tokens} de saída · custo aproximado US$ ${cost.toFixed(3)} (preços do Opus 5.5)`);
-  },
-  async "agente:precos"() {
-    const n = await require("./agents").processPendingPrices(20);
-    console.log(`${n} preço(s) calculado(s).`);
   },
   async "agente:news"() {
     console.log(await require("./agents").runNews({ force: arg === "forcar" }));

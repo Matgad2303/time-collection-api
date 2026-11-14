@@ -20,9 +20,9 @@ Não precisa criar tabelas: a API cria sozinha no deploy (`npm run migrate`).
 2. Em **Limits**, defina um limite de gasto mensal (ex.: US$ 20) para não ter surpresa.
 3. Guarde a chave (`sk-ant-...`). Ela é a `ANTHROPIC_API_KEY`. Nunca coloque no GitHub.
 
-Sem a chave o app funciona inteiro; só o Caçador, o Radar e o NEWS FLEX ficam desligados (o app avisa isso na tela do Economy).
+Sem a chave o app funciona inteiro; só as funções de IA (cadastro por foto, Ateliê, What If Flexx, No pulso hoje, Caçador, NEWS FLEX) mostram "ainda não está ligada".
 
-**Custo esperado:** cada busca do caçador custa por volta de US$ 0,05 a 0,30 (modelo Claude Opus 5.5 + pesquisas na web); a edição semanal do NEWS FLEX, algo parecido. Com poucas pessoas testando, poucos dólares por mês. O painel de administração mostra o custo aproximado dos últimos 30 dias, e o limite `HUNTS_PER_DAY` (5 por pessoa por dia) segura abusos.
+**Custo esperado:** cada busca do Caçador custa por volta de US$ 0,05 a 0,30 (Claude Opus 5.5 + pesquisas na web); a edição semanal do NEWS FLEX, algo parecido; cada uso da IA dentro do app (Ateliê, What If, foto), centavos. Com poucas pessoas testando, poucos dólares por mês. O painel de administração mostra o custo aproximado dos últimos 30 dias, e o limite `AI_PER_DAY` (40 usos por pessoa por dia) segura abusos.
 
 ## 3. API (Render)
 
@@ -55,15 +55,22 @@ npm install
 npm run tornar-admin -- email-da-conta@exemplo.com
 ```
 
-3. Saiam e entrem de novo no app: aparece **Administração** em Minha conta. Lá ficam os relatos, a visão geral, os agentes e a senha provisória para quem esqueceu a senha.
+3. Saiam e entrem de novo no app: aparece **Administração** no menu (☰ > Ajuda). Lá ficam os relatos, a visão geral, os robôs e a senha provisória para quem esqueceu a senha.
+4. **Importar a coleção do Mateus** (37 relógios, pulseiras, caixas, 18 desejos, equipamentos, perfil, comunidade Relógios Fortaleza e NEWS FLEX), depois de criar a conta @ml.time pelo app:
+
+```
+npm run importar -- ../time-collection-web/importacao/colecao-ml-time.json email-da-conta-ml.time@exemplo.com
+```
+
+As fotos já vão junto com o site (`public/_blob/`). Pode rodar de novo sem duplicar nada.
 
 ## 7. Testar
 
 No computador, na pasta da API:
 
 ```
-npm run smoke -- https://SEU-SERVICO.onrender.com            # todas as rotas; cria e apaga um usuário de teste
-npm run smoke -- https://SEU-SERVICO.onrender.com --agentes  # também espera o caçador terminar (1 busca real paga)
+npm run smoke -- https://SEU-SERVICO.onrender.com            # todas as rotas e regras de acesso; cria e apaga 2 contas de teste
+npm run smoke -- https://SEU-SERVICO.onrender.com --agentes  # também espera o Caçador atender (1 busca real paga)
 npm run testar-ia                                            # uma busca real de teste, mostra anúncios e custo (precisa da chave no .env)
 ```
 

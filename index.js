@@ -9,7 +9,8 @@ const { aiEnabled } = require("./ai");
 const app = express();
 app.disable("x-powered-by");
 app.set("trust proxy", 1); // o Render fica na frente da API; assim req.ip é o IP real do usuário
-app.use(express.json({ limit: "2mb" }));
+// fotos do app vão dentro dos documentos (como no protótipo), por isso o limite maior
+app.use(express.json({ limit: "8mb" }));
 const origins = (process.env.CORS_ORIGIN || "*").split(",").map(s => s.trim().replace(/\/$/, ""));
 app.use(cors({ origin: origins.includes("*") ? "*" : origins }));
 
@@ -24,11 +25,8 @@ app.use("/auth/login", rateLimit({ windowMs: 15 * 60 * 1000, max: 20 }));
 app.use("/auth/register", rateLimit({ windowMs: 60 * 60 * 1000, max: 10 }));
 app.use("/auth", require("./auth").router);
 app.use("/users", require("./users"));
-app.use("/watches", require("./watches"));
-app.use("/communities", require("./communities"));
-app.use("/market", require("./market"));
-app.use("/hunts", require("./hunts"));
-app.use("/news", require("./news"));
+app.use("/docs", require("./docs").router);
+app.use("/ia", require("./ia"));
 app.use("/feedback", require("./feedback"));
 app.use("/admin", require("./admin"));
 

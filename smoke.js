@@ -1,14 +1,15 @@
-// Teste de fumaça: percorre as principais rotas da API de ponta a ponta.
-// Uso: npm run smoke                      (API local em http://localhost:3001)
+// Teste de fumaça: percorre a API de ponta a ponta com duas contas de teste e confere as regras de acesso.
+// Uso: npm run smoke                                  (API local em http://localhost:3001)
 //      npm run smoke -- https://sua-api.onrender.com
-//      npm run smoke -- http://localhost:3001 --agentes   também espera o caçador terminar (gasta IA se não for AI_FAKE)
-// Cria um usuário de teste com e-mail aleatório e o apaga no final (ficam só 2 relatos de teste).
+//      npm run smoke -- http://localhost:3001 --agentes   também espera o Caçador atender (gasta IA se não for AI_FAKE)
+// Cria duas contas com e-mail aleatório e apaga as duas no final (ficam só 2 relatos de teste).
 const args = process.argv.slice(2);
 const WAIT_AGENTS = args.includes("--agentes");
 const BASE = (args.find((a) => !a.startsWith("--")) || process.env.API_URL || "http://localhost:3001").replace(/\/$/, "");
 const tag = Date.now().toString(36);
 let token = null;
 let failures = 0;
+const fail = (m) => { failures++; console.log("FALHA " + m); };
 
 async function call(method, path, body, expected) {
   const res = await fetch(BASE + path, {
@@ -19,130 +20,108 @@ async function call(method, path, body, expected) {
   const data = res.status === 204 ? null : await res.json().catch(() => null);
   const ok = res.status === expected;
   if (!ok) failures++;
-  console.log(`${ok ? "ok  " : "FALHA"} ${method} ${path} -> ${res.status}${ok ? "" : ` (esperado ${expected}) ${JSON.stringify(data)}`}`);
+  console.log(`${ok ? "ok  " : "FALHA"} ${method} ${path.slice(0, 70)} -> ${res.status}${ok ? "" : ` (esperado ${expected}) ${JSON.stringify(data)}`}`);
   return data;
+}
+const q = (o) => new URLSearchParams(o).toString();
+
+async function account(name) {
+  const handle = `${name}_${tag}`;
+  const r = await call("POST", "/auth/register", { email: `${handle}@exemplo.com`, password: "senha-forte-123", handle, name, city: "Fortaleza, CE" }, 201);
+  return { handle, token: r?.token, id: r?.user?.id };
 }
 
 (async () => {
   console.log(`Testando ${BASE}\n`);
   const health = await call("GET", "/health", null, 200);
-  console.log(`     agentes de IA: ${health?.ai ? "ligados" : "desligados"}`);
+  console.log(`     IA e robôs: ${health?.ai ? "ligados" : "desligados"}`);
 
-  const handle = `teste_${tag}`;
-  const reg = await call("POST", "/auth/register",
-    { email: `${handle}@exemplo.com`, password: "senha-forte-123", handle, name: "Teste", city: "Fortaleza" }, 201);
-  await call("POST", "/auth/register", { email: `${handle}@exemplo.com`, password: "senha-forte-123", handle, name: "X" }, 409);
-  await call("POST", "/auth/login", { email: `${handle}@exemplo.com`, password: "errada" }, 401);
-  const login = await call("POST", "/auth/login", { email: `${handle}@exemplo.com`, password: "senha-forte-123" }, 200);
-  token = login?.token || reg?.token;
-
+  // Contas
+  const a = await account("ana");
+  const b = await account("bruno");
+  await call("POST", "/auth/register", { email: `${a.handle}@exemplo.com`, password: "senha-forte-123", handle: a.handle, name: "X" }, 409);
+  await call("POST", "/auth/login", { email: `${a.handle}@exemplo.com`, password: "errada" }, 401);
+  token = a.token;
   const me = await call("GET", "/auth/me", null, 200);
-  if (me && me.user.is_admin !== false) { failures++; console.log("FALHA conta nova não deveria ser admin"); }
+  if (me && me.user.is_admin !== false) fail("conta nova não deveria ser admin");
   await call("POST", "/auth/password", { current_password: "errada", new_password: "outra-senha-123" }, 401);
-  await call("POST", "/auth/password", { current_password: "senha-forte-123", new_password: "outra-senha-123" }, 204);
-  await call("POST", "/auth/password", { current_password: "outra-senha-123", new_password: "senha-forte-123" }, 204);
-  await call("PATCH", "/users/me", { bio: "Colecionador de teste", whatsapp: "5585999999999" }, 200);
 
-  const w = await call("POST", "/watches", { name: "Seiko SKX007", brand: "Seiko", movement: "automático" }, 201);
-  await call("POST", "/watches", { name: "Inválido", status: "xyz" }, 400);
-  await call("POST", "/watches", { name: "Preço ruim", price_paid: "abc" }, 400);
-  await call("POST", "/watches", { name: "Tudor BB58", brand: "Tudor", status: "wish" }, 201);
-  await call("GET", "/watches", null, 200);
-  await call("GET", "/watches?status=wish", null, 200);
-  await call("PATCH", `/watches/${w.watch.id}`, { sale_mode: "trade" }, 400);
-  const onSale = await call("PATCH", `/watches/${w.watch.id}`, { sale_mode: "sale", sale_price: 2500, condition: "usado", accepts_trade: true }, 200);
-  if (health?.ai && onSale && !["pending", "working", "done"].includes(onSale.watch.market_status)) { failures++; console.log("FALHA colocar à venda deveria pedir o preço médio"); }
-  await call("PATCH", `/watches/${w.watch.id}`, { status: "on_the_way" }, 200);
-  const detail = await call("GET", `/watches/${w.watch.id}`, null, 200);
-  if (detail && detail.history.length !== 3) { failures++; console.log("FALHA linha do tempo deveria ter 3 itens"); }
-  const mineT = await call("GET", "/market/mine", null, 200);
-  if (mineT && !mineT.watches.some((x) => x.id === w.watch.id && x.sale_mode === "sale")) { failures++; console.log("FALHA relógio à venda deveria aparecer em Meus trades"); }
-  await call("GET", "/market/for-you", null, 200);
+  // Coleção privada (data/users/{eu})
+  const mine = `data/users/${a.id}`;
+  await call("PUT", "/docs/item", { path: mine, id: "w01", data: { kind: "watch", name: "Seiko 5 Sports", brand: "Seiko · Japão", status: "colecao", sale: "disponivel" } }, 204);
+  await call("PUT", "/docs/item", { path: mine, id: "profile", data: { kind: "profile", name: "Ana", handle: a.handle } }, 204);
+  const list = await call("GET", "/docs?" + q({ path: mine, limit: 1000 }), null, 200);
+  if (list && list.docs.length !== 2) fail("coleção deveria ter 2 documentos");
+  const one = await call("GET", "/docs/item?" + q({ path: mine, id: "w01" }), null, 200);
+  if (one && one.doc?.data?.name !== "Seiko 5 Sports") fail("documento lido diferente do gravado");
+  await call("PUT", "/docs/item", { path: mine, id: "x y", data: {} }, 400);
+  await call("PUT", "/docs/item", { path: mine, id: "w02", data: [1, 2] }, 400);
+
+  // Perfil público, comunidades e promoções: todos leem, cada um grava só o seu
+  await call("PUT", "/docs/item", { path: "public", id: a.id, data: { name: "Ana", handle: a.handle } }, 204);
+  await call("PUT", "/docs/item", { path: "cm", id: a.id, data: { communities: [{ id: "fortaleza", name: "Relógios Fortaleza", city: "Fortaleza, CE" }], joins: {} } }, 204);
+  await call("PUT", "/docs/item", { path: `cm/${a.id}/x`, id: "p1", data: { comm: `${a.id}__fortaleza`, text: "Olá!" } }, 204);
+  await call("PUT", "/docs/item", { path: "promo", id: a.id, data: { items: [] } }, 204);
+  await call("PUT", "/docs/item", { path: "hunts", id: a.id, data: { uid: a.id, reqs: [{ id: `h${tag}`, q: "Seiko Alpinist", budget: 3000, cond: "usado", at: new Date().toISOString(), status: "pending" }], brands: [] } }, 204);
+
+  // Regras de acesso, vistas pela outra conta
+  token = b.token;
+  await call("GET", "/docs?" + q({ path: mine }), null, 403);
+  await call("GET", "/docs/item?" + q({ path: mine, id: "w01" }), null, 403);
+  await call("PUT", "/docs/item", { path: mine, id: "w99", data: { kind: "watch" } }, 403);
+  await call("PUT", "/docs/item", { path: "public", id: a.id, data: { name: "invasor" } }, 403);
+  await call("PUT", "/docs/item", { path: `cm/${a.id}/x`, id: "p2", data: { text: "invasor" } }, 403);
+  await call("PUT", "/docs/item", { path: "news", id: "n-x", data: { title: "falsa" } }, 403);
+  const pub = await call("GET", "/docs?" + q({ path: "public" }), null, 200);
+  if (pub && !pub.docs.some((d) => d.id === a.id)) fail("perfil público deveria aparecer para outra conta");
+  await call("GET", "/docs?" + q({ path: `cm/${a.id}/x`, where: "comm", eq: `${a.id}__fortaleza` }), null, 200);
+  const hb = await call("GET", "/docs/item?" + q({ path: "hunts", id: a.id }), null, 403);
+  await call("GET", "/docs?" + q({ path: "news", limit: 400 }), null, 200);
+  await call("GET", "/docs?" + q({ path: "segredo" }), null, 403);
+
+  // Caçador: o robô atende o pedido e grava em hres
+  token = a.token;
   if (WAIT_AGENTS) {
-    let st = "pending";
-    for (let i = 0; i < 60 && ["pending", "working"].includes(st); i++) {
+    let done = false;
+    for (let i = 0; i < 60 && !done; i++) {
       await new Promise((r) => setTimeout(r, 3000));
-      const d = await call("GET", `/watches/${w.watch.id}`, null, 200);
-      st = d?.watch.market_status;
-      if (st === "done") console.log(`     preço médio: R$ ${d.watch.market_price} (${d.watch.market_confidence}) · ${d.watch.market_note}`);
+      const h = await call("GET", "/docs/item?" + q({ path: "hunts", id: a.id }), null, 200);
+      done = h?.doc?.data?.reqs?.[0]?.status === "done";
     }
-    if (st !== "done") { failures++; console.log(`FALHA preço médio terminou com status ${st}`); }
+    const res = await call("GET", "/docs?" + q({ path: "hres", where: "uid", eq: a.id }), null, 200);
+    if (!done || !res?.docs.length) fail("o Caçador não atendeu o pedido");
+    else console.log(`     caçador: ${res.docs[0].data.items.length} anúncio(s) · ${res.docs[0].data.note}`);
   }
-  // Colocado à venda sem preço: lança com o preço médio quando ele existir
-  const w2 = await call("POST", "/watches", { name: "Orient Bambino", brand: "Orient", estimate: 900, sale_mode: "offers" }, 201);
-  await call("DELETE", `/watches/${w2.watch.id}`, null, 204);
-  await call("GET", "/watches/nao-e-uuid", null, 400);
 
-  await call("GET", `/users?q=${handle.slice(0, 6)}`, null, 200);
-  const prof = await call("GET", `/users/${handle}`, null, 200);
-  if (prof && !prof.user.whatsapp) { failures++; console.log("FALHA logado deveria ver o WhatsApp"); }
-  await call("GET", `/users?q=Teste`, null, 200);
-  await call("GET", "/users/ninguem_existe_aqui", null, 404);
-
-  const c = await call("POST", "/communities", { name: `Relógios Teste ${tag}`, city: "Fortaleza" }, 201);
-  await call("GET", "/communities?city=Fortaleza", null, 200);
-  const cd = await call("GET", `/communities/${c.community.id}`, null, 200);
-  if (cd && cd.community.my_role !== "admin") { failures++; console.log("FALHA quem cria deveria ser admin"); }
-  const p = await call("POST", `/communities/${c.community.id}/posts`, { body: "Primeiro post!" }, 201);
-  await call("GET", `/communities/${c.community.id}/posts`, null, 200);
-  await call("DELETE", `/communities/${c.community.id}/posts/${p.post.id}`, null, 204);
-  await call("POST", `/communities/${c.community.id}/leave`, null, 204);
-  await call("GET", `/communities/${c.community.id}/posts`, null, 403);
-  await call("POST", `/communities/${c.community.id}/join`, null, 204);
-
-  await call("GET", "/market/listings?mode=offers&trade=1", null, 200);
-  const listings = await call("GET", "/market/listings?brand=seiko", null, 200);
-  if (listings && !listings.listings.some(l => l.id === w.watch.id)) { failures++; console.log("FALHA relógio à venda não apareceu na vitrine"); }
-  await call("POST", "/market/promos", { title: "Promo", link: "http://inseguro.com" }, 400);
-  const promo = await call("POST", "/market/promos", { title: "Seiko 5 em promoção", link: "https://exemplo.com/p", price: 1200 }, 201);
-  await call("GET", "/market/promos", null, 200);
-  await call("DELETE", `/market/promos/${promo.promo.id}`, null, 204);
-
-  const h = await call("POST", "/hunts", { query: "Seiko Alpinist", budget: 3000, condition: "usado" }, 201);
-  const hl = await call("GET", "/hunts", null, 200);
-  if (hl && typeof hl.ai_enabled !== "boolean") { failures++; console.log("FALHA /hunts deveria dizer se a IA está ligada"); }
-  await call("POST", `/hunts/${h.hunt.id}/retry`, null, 404);
-  if (WAIT_AGENTS) {
-    let status = "pending";
-    for (let i = 0; i < 60 && ["pending", "working"].includes(status); i++) {
-      await new Promise((r) => setTimeout(r, 3000));
-      const d = await call("GET", "/hunts", null, 200);
-      const cur = d?.hunts.find((x) => x.id === h.hunt.id);
-      status = cur?.status;
-      if (status === "done") console.log(`     caçador: ${cur.items.length} anúncio(s) · ${cur.summary}`);
-    }
-    if (status !== "done") { failures++; console.log(`FALHA caçador terminou com status ${status}`); }
+  // IA do app
+  const lim = await call("GET", "/ia/limits", null, 200);
+  if (lim?.enabled) {
+    const r = await call("POST", "/ia/json", { prompt: 'Responda SOMENTE com JSON: {"ok": true}', tier: "quick" }, 200);
+    if (r && typeof r.data !== "object") fail("IA deveria devolver JSON");
   }
-  await call("PUT", "/hunts/radar", { brands: [{ brand: "Seiko", max_price: 3000 }, { brand: "Orient" }] }, 200);
-  await call("GET", "/hunts/radar", null, 200);
-  await call("DELETE", `/hunts/${h.hunt.id}`, null, 204);
-
-  await call("GET", "/news", null, 200);
+  await call("POST", "/ia/json", { prompt: "teste", images: ["data:text/plain;base64,AAAA"] }, lim?.enabled ? 400 : 503);
 
   // Relatos
   await call("POST", "/feedback", { message: "oi" }, 400);
-  await call("POST", "/feedback", { kind: "bug", message: "Teste automático: botão não respondeu", page: "/economy", app_version: "smoke" }, 201);
-  const mine = await call("GET", "/feedback/mine", null, 200);
-  if (mine && mine.feedback.length !== 1) { failures++; console.log("FALHA deveria ter 1 relato meu"); }
+  await call("POST", "/feedback", { kind: "bug", message: "Teste automático: botão não respondeu", page: "economy", app_version: "smoke" }, 201);
+  const fm = await call("GET", "/feedback/mine", null, 200);
+  if (fm && fm.feedback.length !== 1) fail("deveria ter 1 relato meu");
   await call("GET", "/admin/overview", null, 403);
-  await call("DELETE", `/watches/${w.watch.id}`, null, 204);
-
-  const saved = token;
   token = null;
-  await call("GET", "/watches", null, 401);
-  const anon = await call("GET", `/users/${handle}`, null, 200);
-  if (anon && anon.user.whatsapp) { failures++; console.log("FALHA visitante não deveria ver o WhatsApp"); }
+  await call("GET", "/docs?" + q({ path: "public" }), null, 401);
   await call("POST", "/feedback", { kind: "account", message: "Esqueci minha senha (teste)" }, 400);
-  await call("POST", "/feedback", { kind: "account", message: "Esqueci minha senha (teste)", contact: `${handle}@exemplo.com` }, 201);
+  await call("POST", "/feedback", { kind: "account", message: "Esqueci minha senha (teste)", contact: `${a.handle}@exemplo.com` }, 201);
 
-  // Excluir a conta de teste (apaga tudo dela)
-  token = saved;
-  await call("DELETE", "/users/me", { password: "errada" }, 401);
-  await call("DELETE", "/users/me", { password: "senha-forte-123" }, 204);
+  // Excluir as contas de teste (apaga também todos os documentos delas)
+  for (const acc of [a, b]) {
+    token = acc.token;
+    await call("DELETE", "/users/me", { password: "senha-forte-123" }, 204);
+  }
+  token = b.token;
   await call("GET", "/auth/me", null, 404);
   token = null;
   await call("GET", "/rota-que-nao-existe", null, 404);
 
   console.log(failures ? `\n${failures} falha(s).` : "\nTudo certo.");
   process.exit(failures ? 1 : 0);
-})().catch(e => { console.error("Não consegui falar com a API:", e.message); process.exit(1); });
+})().catch((e) => { console.error("Não consegui falar com a API:", e.message); process.exit(1); });

@@ -1,6 +1,6 @@
 {
   "name": "time-collection-api",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "API do Time Collection: coleção, comunidades, mercado, agentes de IA e relatos.",
   "main": "index.js",
   "type": "commonjs",
@@ -18,7 +18,7 @@
     "agente:cacador": "node cli.js agente:cacador",
     "agente:news": "node cli.js agente:news",
     "testar-ia": "node cli.js testar-ia",
-    "agente:precos": "node cli.js agente:precos"
+    "importar": "node importar.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",

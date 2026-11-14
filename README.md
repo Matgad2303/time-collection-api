@@ -1,6 +1,6 @@
 # Time Collection — API
 
-Back-end do Time Collection, o app para o universo da relojoaria: coleção, Wish Time, comunidades por cidade, Trades & Deals, ECONOMY Time (caçador sob pedido e radar de marcas) e NEWS FLEX.
+Back-end do Time Collection, o app para o universo da relojoaria: coleção, Test/Wish/Bench Time, comunidades por cidade, Trades & Deals, ECONOMY Time (Caçador sob pedido e What If Flexx) e NEWS FLEX. Guarda os documentos do app, faz o login, chama a IA e roda os robôs.
 
 Stack: Node.js 20+, Express, PostgreSQL puro (sem lógica no banco), login com JWT, agentes de IA com o Claude (Anthropic).
 
@@ -40,4 +40,5 @@ Passo a passo completo (banco, API, site e app): [DEPLOY.md](DEPLOY.md).
 | `npm run tornar-admin -- email` | dá acesso ao painel de administração |
 | `npm run nova-senha -- email` | senha provisória para quem esqueceu |
 | `npm run testar-ia` | uma busca real do caçador, sem gravar, mostrando o custo |
-| `npm run agente:cacador` / `npm run agente:news` | roda os agentes na hora |
+| `npm run agente:cacador` / `npm run agente:news` | roda os robôs na hora |
+| `npm run importar -- arquivo.json email` | importa a coleção exportada do protótipo para uma conta |

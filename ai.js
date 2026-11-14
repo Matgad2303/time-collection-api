@@ -71,4 +71,41 @@ async function research({ system, prompt, tool, maxSearches = 8, maxFetches = 4,
   throw new AiError("O agente terminou sem entregar o resultado");
 }
 
-module.exports = { research, aiEnabled, AiError, MODEL, FAKE };
+// IA dentro do app (Ateliê, What If Flexx, cadastro por foto, No pulso hoje, faixa de preço...).
+// O app manda um texto que pede "Responda SOMENTE com JSON" e, às vezes, fotos. Devolve o JSON já lido.
+// tier vem do próprio app: "quick" (respostas curtas) usa um modelo mais rápido e barato.
+const QUICK_MODEL = process.env.AI_MODEL_QUICK || "claude-haiku-5-5";
+
+function parseJson(text) {
+  const t = String(text || "").replace(/```json|```/g, "").trim();
+  try { return JSON.parse(t); } catch {}
+  const a = t.indexOf("{"), b = t.lastIndexOf("}");
+  if (a >= 0 && b > a) { try { return JSON.parse(t.slice(a, b + 1)); } catch {} }
+  const c = t.indexOf("["), d = t.lastIndexOf("]");
+  if (c >= 0 && d > c) { try { return JSON.parse(t.slice(c, d + 1)); } catch {} }
+  throw new AiError("A IA não respondeu no formato esperado");
+}
+
+// images: [{ media_type: "image/jpeg", data: "<base64>" }]
+async function askJson({ prompt, images = [], tier = "default", fake }) {
+  if (FAKE) return { data: fake ? fake() : { ok: true, note: "Resposta de teste (AI_FAKE)." }, usage: { input_tokens: 0, output_tokens: 0 } };
+  if (!process.env.ANTHROPIC_API_KEY) throw new AiError("ANTHROPIC_API_KEY não configurada");
+  const quick = tier === "quick";
+  const content = [
+    ...images.slice(0, 8).map((im) => ({ type: "image", source: { type: "base64", media_type: im.media_type, data: im.data } })),
+    { type: "text", text: prompt },
+  ];
+  const res = await getClient().beta.messages.create({
+    model: quick ? QUICK_MODEL : MODEL,
+    max_tokens: 16000,
+    output_config: { effort: quick ? "low" : tier === "complex" ? "high" : EFFORT },
+    ...(quick ? {} : { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" }),
+    system: "Você é a IA do Time Collection, um app brasileiro para colecionadores de relógios. Responda em português do Brasil. Quando o pedido disser para responder só com JSON, responda apenas com o JSON pedido, sem texto antes ou depois.",
+    messages: [{ role: "user", content }],
+  });
+  if (res.stop_reason === "refusal") throw new AiError("O modelo recusou o pedido");
+  const text = res.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+  return { data: parseJson(text), usage: { input_tokens: res.usage.input_tokens || 0, output_tokens: res.usage.output_tokens || 0 } };
+}
+
+module.exports = { research, askJson, aiEnabled, AiError, MODEL, FAKE };

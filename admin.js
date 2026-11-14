@@ -22,19 +22,20 @@ router.get("/overview", wrap(async (_req, res) => {
   const [users, users7, watches, communities, posts, promos] = await Promise.all([
     count("select count(*)::int n from users"),
     count("select count(*)::int n from users where created_at > now() - interval '7 days'"),
-    count("select count(*)::int n from watches"),
-    count("select count(*)::int n from communities"),
-    count("select count(*)::int n from posts"),
-    count("select count(*)::int n from promos"),
+    count("select count(*)::int n from docs where path like 'data/users/%' and data->>'kind' = 'watch' and coalesce(data->>'status','') <> 'desejo'"),
+    count("select coalesce(sum(jsonb_array_length(coalesce(data->'communities','[]'::jsonb))),0)::int n from docs where path='cm'"),
+    count("select count(*)::int n from docs where path like 'cm/%/x'"),
+    count("select coalesce(sum(jsonb_array_length(coalesce(data->'items','[]'::jsonb))),0)::int n from docs where path='promo'"),
   ]);
   const feedback = await query("select status, count(*)::int n from feedback group by status");
-  const hunts = await query("select status, count(*)::int n from hunts group by status");
+  const hunts = await query(`select r->>'status' status, count(*)::int n from docs, jsonb_array_elements(coalesce(data->'reqs','[]'::jsonb)) r
+                              where path='hunts' group by 1`);
   const ai30 = await one(
     `select count(*)::int runs, count(*) filter (where status='error')::int errors,
             coalesce(sum(input_tokens),0)::bigint input_tokens, coalesce(sum(output_tokens),0)::bigint output_tokens,
             coalesce(sum(searches),0)::int searches
        from agent_runs where started_at > now() - interval '30 days'`);
-  const lastNews = await one("select max(edition) edition from news");
+  const lastNews = await one("select max(data->>'edition') edition from docs where path='news' and id like 'edition-%'");
   res.json({
     users, users_last_7_days: users7, watches, communities, posts, promos,
     feedback: Object.fromEntries(feedback.map((r) => [r.status, r.n])),
@@ -93,14 +94,9 @@ router.post("/agents/news", wrap(async (req, res) => {
 
 router.post("/agents/hunts", wrap(async (_req, res) => {
   if (!aiEnabled()) throw new HttpError(400, "Agentes desligados: configure ANTHROPIC_API_KEY.");
-  res.json({ processed: await agents.processPendingHunts() });
+  res.json({ processed: await agents.processHunts() });
 }));
 
-router.post("/hunts/:id/retry", wrap(async (req, res) => {
-  const h = await one(`update hunts set status='pending', attempts=0, error=null where id=$1 returning id`, [req.params.id]);
-  if (!h) throw new HttpError(404, "Pedido não encontrado.");
-  agents.kickHunts();
-  res.json({ ok: true });
-}));
+
 
 module.exports = router;
