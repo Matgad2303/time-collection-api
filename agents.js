@@ -3,7 +3,7 @@
 //                    procura anúncios reais e grava o resultado em hres/{pedido}
 //   Deixar avisado   pedidos com status "watch": confere de 12 em 12 h e avisa UMA vez quando aparece
 //                    promoção de verdade; depois encerra
-//   NEWS FLEX        uma vez por semana (segunda), monta a edição em news
+//   NEWS FLEX        toda segunda às 7h (horário de Fortaleza), monta a edição em news
 //
 // Regra do produto: nenhum robô procura promoção por conta própria. Tudo parte de um pedido da pessoa.
 // Os documentos seguem o mesmo formato do protótipo no Claude (ver docs/DADOS do pacote do projeto).
@@ -30,6 +30,15 @@ function currentEdition(d = new Date()) {
   const day = t.getUTCDay() || 7;
   t.setUTCDate(t.getUTCDate() - (day - 1));
   return t.toISOString().slice(0, 10);
+}
+
+// NEWS FLEX sai toda segunda-feira às 7h (horário de Fortaleza/Brasília).
+// Na segunda antes das 7h ainda não é hora; se a API estava parada nesse horário, a edição sai assim que ela voltar.
+const NEWS_HOUR = 7;
+function newsDue(d = new Date()) {
+  const p = new Intl.DateTimeFormat("en-US", { timeZone: "America/Fortaleza", weekday: "short", hour: "numeric", hour12: false }).formatToParts(d);
+  const get = (t) => p.find((x) => x.type === t).value;
+  return !(get("weekday") === "Mon" && Number(get("hour")) % 24 < NEWS_HOUR);
 }
 
 async function recordRun(agent, ref, status, detail, usage = {}, startedAt) {
@@ -290,7 +299,7 @@ async function tick({ weekly = false } = {}) {
   try {
     do {
       again = false;
-      if (weekly) { weekly = false; await runNews(); }
+      if (weekly) { weekly = false; if (newsDue()) await runNews(); }
       await processHunts();
     } while (again);
   } catch (e) {
@@ -300,15 +309,15 @@ async function tick({ weekly = false } = {}) {
 
 const enabled = () => aiEnabled() && process.env.AGENTS_DISABLED !== "true";
 
-// Pedidos: na hora e a cada 2 min; NEWS FLEX conferido na partida e a cada 6 h
+// Pedidos: na hora e a cada 2 min; NEWS FLEX conferido na partida e a cada 10 min (sai na segunda às 7h)
 function startAgents() {
   if (!enabled()) { log("desligados (configure ANTHROPIC_API_KEY para ligar)"); return; }
   log("ligados");
   setTimeout(() => tick({ weekly: true }), 10_000).unref();
   setInterval(() => tick(), 2 * 60 * 1000).unref();
-  setInterval(() => tick({ weekly: true }), 6 * 60 * 60 * 1000).unref();
+  setInterval(() => tick({ weekly: true }), 10 * 60 * 1000).unref();
 }
 
 const kickHunts = () => { if (enabled()) setImmediate(() => tick()); };
 
-module.exports = { startAgents, kickHunts, processHunts, runNews, currentEdition, HUNT_SYSTEM, HUNT_TOOL };
+module.exports = { startAgents, kickHunts, processHunts, runNews, currentEdition, newsDue, HUNT_SYSTEM, HUNT_TOOL };

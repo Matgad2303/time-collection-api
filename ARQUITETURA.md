@@ -72,7 +72,7 @@ A IA é o Claude (Anthropic). Sem `ANTHROPIC_API_KEY` o app funciona e as funç�
 | App: cadastro por foto, Ateliê, diagnóstico, plano de manutenção, bancada completa, How to do, What If Flexx, No pulso hoje, faixa de preço | o front chama `POST /ia/json` com o pedido (e fotos); limite de `AI_PER_DAY` usos por pessoa por dia (padrão 40) |
 | Caçador | a pessoa pesquisa no ECONOMY Time; o pedido entra em `hunts` e o robô procura anúncios reais com link e grava em `hres` (na hora e a cada 2 min) |
 | Deixar avisado | o robô confere de 12 em 12 h e avisa UMA vez quando aparece promoção de verdade; depois encerra |
-| NEWS FLEX | uma edição por semana (segunda), 8 a 12 notícias; ficam as 8 edições mais recentes |
+| NEWS FLEX | uma edição por semana, toda segunda às 7h (horário de Fortaleza), 8 a 12 notícias; ficam as 8 edições mais recentes |
 
 Regra do produto: nenhum robô procura promoção por conta própria, e nada é vendido dentro do app. Vendas e trocas são pelo WhatsApp; compras, pelos links das lojas.
 
