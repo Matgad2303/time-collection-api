@@ -73,7 +73,18 @@ async function postJson(url, body, headers = {}, timeoutMs = 120000) {
 }
 
 // ---------- Gemini ----------
-async function gemini({ system, prompt, images = [], model, search = false, json = false, maxTokens = 8192 }) {
+// O Google às vezes fica sobrecarregado (503) ou corta um modelo por minuto (429). Por isso cada pedido
+// tenta uma lista de modelos, um depois do outro, antes de passar para o próximo provedor.
+const uniq = (a) => [...new Set(a.filter(Boolean))];
+const GEMINI_CHAIN = () => uniq([GEMINI_MODEL(), "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-flash-lite-latest"]);
+const GEMINI_QUICK_CHAIN = () => uniq([GEMINI_QUICK(), "gemini-3.5-flash-lite", GEMINI_MODEL()]);
+
+// A pesquisa no Google (grounding) pode não estar liberada no plano grátis da conta. Quando o Google
+// recusa por cota, a API para de tentar por 6 horas e vai direto para o Groq, sem gastar tempo.
+let searchBlockedUntil = 0;
+const geminiSearchOk = () => Date.now() > searchBlockedUntil;
+
+async function gemini({ system, prompt, images = [], models, search = false, json = false, maxTokens = 8192 }) {
   const parts = [
     ...images.slice(0, 8).map((im) => ({ inline_data: { mime_type: im.media_type, data: im.data } })),
     { text: prompt },
@@ -84,14 +95,28 @@ async function gemini({ system, prompt, images = [], model, search = false, json
     generationConfig: { maxOutputTokens: maxTokens, temperature: 0.4, ...(json && !search ? { responseMimeType: "application/json" } : {}) },
     ...(search ? { tools: [{ google_search: {} }] } : {}),
   };
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-  const d = await postJson(url, body, { "x-goog-api-key": process.env.GEMINI_API_KEY });
-  const cand = (d.candidates || [])[0];
-  if (!cand) throw new AiError("Gemini não respondeu" + (d.promptFeedback?.blockReason ? ` (${d.promptFeedback.blockReason})` : ""));
-  const text = (cand.content?.parts || []).map((p) => p.text || "").join("");
-  if (!text.trim()) throw new AiError(`Gemini respondeu vazio (${cand.finishReason || "?"})`);
-  const u = d.usageMetadata || {};
-  return { text, usage: { input_tokens: u.promptTokenCount || 0, output_tokens: u.candidatesTokenCount || 0, searches: search ? 1 : 0 } };
+  let last;
+  for (const model of models) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+      const d = await postJson(url, body, { "x-goog-api-key": process.env.GEMINI_API_KEY }, search ? 90000 : 60000);
+      const cand = (d.candidates || [])[0];
+      if (!cand) throw new AiError("Gemini não respondeu" + (d.promptFeedback?.blockReason ? ` (${d.promptFeedback.blockReason})` : ""));
+      const text = (cand.content?.parts || []).map((p) => p.text || "").join("");
+      if (!text.trim()) throw new AiError(`Gemini respondeu vazio (${cand.finishReason || "?"})`);
+      const u = d.usageMetadata || {};
+      return { text, usage: { input_tokens: u.promptTokenCount || 0, output_tokens: u.candidatesTokenCount || 0, searches: search ? 1 : 0, model } };
+    } catch (e) {
+      last = e;
+      if (search && e.status === 429 && /quota/i.test(e.message)) {
+        searchBlockedUntil = Date.now() + 6 * 60 * 60 * 1000;
+        throw new AiError("Pesquisa do Gemini sem cota no plano grátis");
+      }
+      if (e.status === 400 || e.status === 401 || e.status === 403) throw e; // chave ou pedido errado: trocar de modelo não resolve
+      console.warn(`[ia] gemini ${model} falhou: ${e.message.slice(0, 120)}`);
+    }
+  }
+  throw last || new AiError("Gemini não respondeu");
 }
 
 // ---------- Groq (compatível com a API da OpenAI) ----------
@@ -150,7 +175,8 @@ async function research({ system, prompt, tool, maxSearches = 8, maxFetches = 4,
   for (const p of list) {
     try {
       if (p === "gemini") {
-        const r = await gemini({ system: sys, prompt: schemaPrompt(prompt, tool), model: GEMINI_MODEL(), search: true, maxTokens: 16000 });
+        if (!geminiSearchOk()) continue;
+        const r = await gemini({ system: sys, prompt: schemaPrompt(prompt, tool), models: GEMINI_CHAIN(), search: true, maxTokens: 16000 });
         return { data: await keepWorkingLinks(parseJson(r.text)), usage: { ...r.usage, provider: "gemini" } };
       }
       if (p === "groq") {
@@ -163,7 +189,9 @@ async function research({ system, prompt, tool, maxSearches = 8, maxFetches = 4,
       console.warn(`[ia] pesquisa: ${p} falhou: ${e.message}`);
     }
   }
-  throw last || new AiError("A IA não respondeu");
+  throw last || new AiError(has.gemini() && !geminiSearchOk()
+    ? "A pesquisa na internet está sem cota no Gemini grátis; ligue o Groq (GROQ_API_KEY) para o Caçador e o NEWS FLEX"
+    : "A IA não respondeu");
 }
 
 async function researchClaude({ system, prompt, tool, maxSearches, maxFetches }) {
@@ -210,7 +238,7 @@ async function askJson({ prompt, images = [], tier = "default", fake }) {
     if (p === "groq" && images.length) continue; // o modelo de texto do Groq não lê fotos
     try {
       if (p === "gemini") {
-        const r = await gemini({ system: BASE_SYSTEM, prompt, images, model: quick ? GEMINI_QUICK() : GEMINI_MODEL(), json: true });
+        const r = await gemini({ system: BASE_SYSTEM, prompt, images, models: quick ? GEMINI_QUICK_CHAIN() : GEMINI_CHAIN(), json: true });
         return { data: parseJson(r.text), usage: { ...r.usage, provider: "gemini" } };
       }
       if (p === "groq") {
