@@ -11,7 +11,7 @@
 //   GEMINI_MODEL_QUICK  modelo das respostas rápidas (padrão gemini-flash-lite-latest)
 //   GROQ_API_KEY        liga o Groq (console.groq.com > API Keys; sem cartão)
 //   GROQ_MODEL          modelo de texto (padrão openai/gpt-oss-120b)
-//   GROQ_SEARCH_MODEL   modelo com pesquisa web (padrão groq/compound)
+//   GROQ_SEARCH_MODEL   modelo que pesquisa na web com a ferramenta browser_search (padrão openai/gpt-oss-120b)
 //   ANTHROPIC_API_KEY   liga o Claude (pago), usado só se os grátis falharem
 //   AI_MODEL / AI_MODEL_QUICK / AI_EFFORT   modelos e esforço do Claude
 //   AI_FAKE=true        modo de teste: devolve dados de exemplo sem chamar nenhuma IA
@@ -29,7 +29,7 @@ const FAKE = process.env.AI_FAKE === "true";
 const GEMINI_MODEL = () => process.env.GEMINI_MODEL || "gemini-flash-latest";
 const GEMINI_QUICK = () => process.env.GEMINI_MODEL_QUICK || "gemini-flash-lite-latest";
 const GROQ_MODEL = () => process.env.GROQ_MODEL || "openai/gpt-oss-120b";
-const GROQ_SEARCH = () => process.env.GROQ_SEARCH_MODEL || "groq/compound";
+const GROQ_SEARCH = () => process.env.GROQ_SEARCH_MODEL || "openai/gpt-oss-120b";
 
 const has = {
   gemini: () => Boolean(process.env.GEMINI_API_KEY),
@@ -120,16 +120,19 @@ async function gemini({ system, prompt, images = [], models, search = false, jso
 }
 
 // ---------- Groq (compatível com a API da OpenAI) ----------
-async function groq({ system, prompt, model, json = false, maxTokens = 8192 }) {
+async function groq({ system, prompt, model, json = false, search = false, maxTokens = 8192 }) {
   const body = {
     model,
     max_tokens: maxTokens,
     temperature: 0.4,
     messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
-    ...(json ? { response_format: { type: "json_object" } } : {}),
+    ...(json && !search ? { response_format: { type: "json_object" } } : {}),
+    // Pesquisa na web feita pelo próprio Groq (ferramenta browser_search dos modelos gpt-oss).
+    ...(search ? { tools: [{ type: "browser_search" }], tool_choice: "required" } : {}),
   };
-  const d = await postJson("https://api.groq.com/openai/v1/chat/completions", body, { Authorization: `Bearer ${process.env.GROQ_API_KEY}` });
-  const text = d.choices?.[0]?.message?.content || "";
+  const d = await postJson("https://api.groq.com/openai/v1/chat/completions", body, { Authorization: `Bearer ${process.env.GROQ_API_KEY}` }, 120000);
+  // Tira as marcas de citação do tipo 【3†L8-L12】 que o modelo coloca no texto.
+  const text = (d.choices?.[0]?.message?.content || "").replace(/【[^】]*】/g, "");
   if (!text.trim()) throw new AiError("Groq respondeu vazio");
   return { text, usage: { input_tokens: d.usage?.prompt_tokens || 0, output_tokens: d.usage?.completion_tokens || 0, searches: 0 } };
 }
@@ -159,9 +162,10 @@ async function keepWorkingLinks(data) {
 
 // ---------- Pesquisa na web com resultado em formato fixo (Caçador, Deixar avisado, NEWS FLEX) ----------
 function schemaPrompt(prompt, tool) {
+  const hoje = new Date().toLocaleDateString("pt-BR", { timeZone: "America/Fortaleza" });
   return `${prompt}
 
-Pesquise na internet antes de responder. Use somente informações e links que você realmente encontrou na pesquisa; nunca invente links, preços ou datas.
+Hoje é ${hoje}. Pesquise na internet antes de responder e prefira o que foi publicado nos últimos dias; descarte o que for antigo. Use somente informações e links que você realmente encontrou na pesquisa; nunca invente links, preços ou datas.
 Responda SOMENTE com um JSON (sem texto antes ou depois) que siga exatamente este esquema JSON Schema:
 ${JSON.stringify(tool.input_schema)}`;
 }
@@ -180,7 +184,7 @@ async function research({ system, prompt, tool, maxSearches = 8, maxFetches = 4,
         return { data: await keepWorkingLinks(parseJson(r.text)), usage: { ...r.usage, provider: "gemini" } };
       }
       if (p === "groq") {
-        const r = await groq({ system: sys, prompt: schemaPrompt(prompt, tool), model: GROQ_SEARCH(), maxTokens: 8000 });
+        const r = await groq({ system: sys, prompt: schemaPrompt(prompt, tool), model: GROQ_SEARCH(), search: true, maxTokens: 8000 });
         return { data: await keepWorkingLinks(parseJson(r.text)), usage: { ...r.usage, provider: "groq" } };
       }
       return await researchClaude({ system, prompt, tool, maxSearches, maxFetches });

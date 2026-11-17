@@ -100,7 +100,7 @@ O site já funciona como app instalável (PWA). Para aparecer nas lojas:
 ## IA grátis (desde 17/11/2026)
 A API tenta, nesta ordem, o primeiro provedor que tiver chave:
 1. **Gemini** (`GEMINI_API_KEY`): grátis, sem cartão. Em aistudio.google.com → *Get API key* → *Create API key*. Lê fotos e pesquisa no Google (Caçador, Deixar avisado, NEWS FLEX).
-2. **Groq** (`GROQ_API_KEY`): grátis, sem cartão. Em console.groq.com → *API Keys*. Reserva: texto e pesquisa web (modelo `groq/compound`); não lê fotos.
+2. **Groq** (`GROQ_API_KEY`): grátis, sem cartão. Em console.groq.com → *API Keys*. Reserva: texto e pesquisa web (modelo `openai/gpt-oss-120b (ferramenta browser_search)`); não lê fotos.
 3. **Claude** (`ANTHROPIC_API_KEY`): pago, opcional; só entra se os grátis falharem.
 
 Os links que a IA devolve (anúncios e notícias) são conferidos pela API antes de aparecer no app; os que não abrem são descartados.
