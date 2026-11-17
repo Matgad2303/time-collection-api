@@ -90,3 +90,10 @@ O site já funciona como app instalável (PWA). Para aparecer nas lojas:
 
 - **Google Play:** dá para empacotar o próprio PWA com o PWABuilder (pwabuilder.com) como TWA. Precisa de conta de desenvolvedor (US$ 25, pagamento único) e domínio com o arquivo `assetlinks.json`.
 - **App Store:** a Apple exige empacotar com Capacitor e ter recursos nativos para aprovar; conta de desenvolvedor US$ 99/ano e revisão de alguns dias.
+
+## Aviso de erros (Sentry)
+- Variável `SENTRY_DSN` no serviço da API (Render > Environment). Sem ela, o aviso fica desligado e nada muda.
+- Projeto no Sentry: organização `time-collection`, projeto `time-collection-api`.
+- O que vai para o Sentry: erros 500 da API (com a rota e o id do usuário) e falhas dos agentes. Não vai corpo de requisição, cabeçalho, cookie nem IP (`monitor.js`).
+- Um monitor de uptime do Sentry chama `/health` a cada 10 min. Isso também mantém a API grátis do Render acordada (ela dorme após 15 min parada).
+

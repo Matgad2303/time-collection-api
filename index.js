@@ -1,4 +1,5 @@
 require("dotenv").config();
+const monitor = require("./monitor"); // antes de tudo, para pegar erros desde a partida
 const express = require("express");
 const cors = require("cors");
 const { pool } = require("./db");
@@ -44,7 +45,7 @@ const PG_ERRORS = {
   "23514": [400, "Valor não permitido."],
 };
 
-app.use((err, _req, res, _next) => {
+app.use((err, req, res, _next) => {
   if (err.type === "entity.parse.failed") return res.status(400).json({ error: "JSON inválido no corpo da requisição." });
   if (err.type === "entity.too.large") return res.status(413).json({ error: "Requisição grande demais." });
   if (err.code && PG_ERRORS[err.code]) {
@@ -52,7 +53,7 @@ app.use((err, _req, res, _next) => {
     return res.status(status).json({ error });
   }
   const status = err.status || 500;
-  if (status >= 500) console.error(err);
+  if (status >= 500) { console.error(err); monitor.report(err, { rota: req.method + " " + (req.route ? req.baseUrl + req.route.path : req.baseUrl || req.path), usuario: req.user ? req.user.id : "anônimo" }); }
   res.status(status).json({ error: status >= 500 ? "Erro interno. Tente de novo em instantes." : err.message });
 });
 

@@ -162,7 +162,7 @@ async function runHuntReq(uid, r) {
     await updateReq(uid, r.id, { status: tries >= 3 ? "done" : "pending", tries });
     if (tries >= 3) await putDoc("hres", r.id, { uid, q: r.q, at: nowIso(), items: [], note: "Não consegui buscar agora. Tente de novo mais tarde." });
     await recordRun("hunt", r.id, "error", e.message, {}, startedAt);
-    console.error("[agentes] caçador falhou", r.id, e.message);
+    console.error("[agentes] caçador falhou", r.id, e.message); require("./monitor").report(e, { agente: "caçador" });
   }
 }
 
@@ -185,7 +185,7 @@ async function runWatchReq(uid, r) {
     }
   } catch (e) {
     await recordRun("watch", r.id, "error", e.message, {}, startedAt);
-    console.error("[agentes] aviso falhou", r.id, e.message);
+    console.error("[agentes] aviso falhou", r.id, e.message); require("./monitor").report(e, { agente: "aviso" });
   }
 }
 
@@ -285,7 +285,7 @@ async function runNews({ force = false } = {}) {
     return { edition, count: items.length };
   } catch (e) {
     await recordRun("news", edition, "error", e.message, {}, startedAt);
-    console.error("[agentes] news falhou", e.message);
+    console.error("[agentes] news falhou", e.message); require("./monitor").report(e, { agente: "news" });
     return { edition, error: e.message };
   }
 }
@@ -303,7 +303,7 @@ async function tick({ weekly = false } = {}) {
       await processHunts();
     } while (again);
   } catch (e) {
-    console.error("[agentes] erro no ciclo", e.message);
+    console.error("[agentes] erro no ciclo", e.message); require("./monitor").report(e, { agente: "ciclo" });
   } finally { busy = false; }
 }
 
