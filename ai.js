@@ -81,8 +81,11 @@ async function postJson(url, body, headers = {}, timeoutMs = 120000) {
 // O Google às vezes fica sobrecarregado (503) ou corta um modelo por minuto (429). Por isso cada pedido
 // tenta uma lista de modelos, um depois do outro, antes de passar para o próximo provedor.
 const uniq = (a) => [...new Set(a.filter(Boolean))];
-const GEMINI_CHAIN = () => uniq([GEMINI_MODEL(), "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-flash-lite-latest"]);
-const GEMINI_QUICK_CHAIN = () => uniq([GEMINI_QUICK(), "gemini-3.5-flash-lite", GEMINI_MODEL()]);
+const GEMINI_CHAIN = () => uniq([process.env.GEMINI_MODEL, "gemini-3.5-flash", "gemini-3-flash-preview", "gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-flash-latest"]);
+const GEMINI_QUICK_CHAIN = () => uniq([process.env.GEMINI_MODEL_QUICK, "gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-3.5-flash", "gemini-3-flash-preview"]);
+// Groq: cada modelo tem a própria cota diária, então a corrente passa de um para o outro.
+const GROQ_TEXT_CHAIN = () => uniq([process.env.GROQ_MODEL, "openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b"]);
+const GROQ_SEARCH_CHAIN = () => uniq([process.env.GROQ_SEARCH_MODEL, "openai/gpt-oss-120b", "openai/gpt-oss-20b"]);
 
 // A pesquisa no Google (grounding) pode não estar liberada no plano grátis da conta. Quando o Google
 // recusa por cota, a API para de tentar por 6 horas e vai direto para o Groq, sem gastar tempo.
@@ -104,7 +107,7 @@ async function gemini({ system, prompt, images = [], models, search = false, jso
   for (const model of models) {
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-      const d = await postJson(url, body, { "x-goog-api-key": process.env.GEMINI_API_KEY }, search ? 90000 : 30000);
+      const d = await postJson(url, body, { "x-goog-api-key": process.env.GEMINI_API_KEY }, search ? 90000 : 20000);
       const cand = (d.candidates || [])[0];
       if (!cand) throw new AiError("Gemini não respondeu" + (d.promptFeedback?.blockReason ? ` (${d.promptFeedback.blockReason})` : ""));
       const text = (cand.content?.parts || []).map((p) => p.text || "").join("");
@@ -125,7 +128,7 @@ async function gemini({ system, prompt, images = [], models, search = false, jso
 }
 
 // ---------- Groq (compatível com a API da OpenAI) ----------
-async function groq({ system, prompt, model, json = false, search = false, maxTokens = 8192 }) {
+async function groqOne({ system, prompt, model, json, search, maxTokens, toolChoice }) {
   const body = {
     model,
     max_tokens: maxTokens,
@@ -133,13 +136,28 @@ async function groq({ system, prompt, model, json = false, search = false, maxTo
     messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
     ...(json && !search ? { response_format: { type: "json_object" } } : {}),
     // Pesquisa na web feita pelo próprio Groq (ferramenta browser_search dos modelos gpt-oss).
-    ...(search ? { tools: [{ type: "browser_search" }], tool_choice: "required" } : {}),
+    ...(search ? { tools: [{ type: "browser_search" }], tool_choice: toolChoice } : {}),
   };
   const d = await postJson("https://api.groq.com/openai/v1/chat/completions", body, { Authorization: `Bearer ${process.env.GROQ_API_KEY}` }, 120000);
   // Tira as marcas de citação do tipo 【3†L8-L12】 que o modelo coloca no texto.
   const text = (d.choices?.[0]?.message?.content || "").replace(/【[^】]*】/g, "");
   if (!text.trim()) throw new AiError("Groq respondeu vazio");
-  return { text, usage: { input_tokens: d.usage?.prompt_tokens || 0, output_tokens: d.usage?.completion_tokens || 0, searches: 0 } };
+  return { text, usage: { input_tokens: d.usage?.prompt_tokens || 0, output_tokens: d.usage?.completion_tokens || 0, searches: search ? 1 : 0, model } };
+}
+async function groq({ system, prompt, models, json = false, search = false, maxTokens = 8192 }) {
+  let last;
+  for (const model of models) {
+    for (const toolChoice of search ? ["required", "auto"] : [undefined]) {
+      try { return await groqOne({ system, prompt, model, json, search, maxTokens, toolChoice }); }
+      catch (e) {
+        last = e;
+        console.warn(`[ia] groq ${model} falhou: ${String(e.message).slice(0, 120)}`);
+        if (e.status === 401 || e.status === 403) throw e;
+        if (!/vazio/.test(e.message)) break; // cota ou erro: próximo modelo; resposta vazia: tenta de novo sem forçar a pesquisa
+      }
+    }
+  }
+  throw last || new AiError("Groq não respondeu");
 }
 
 // ---------- Mistral (reserva grátis; lê fotos, não pesquisa na web) ----------
@@ -208,7 +226,7 @@ async function research({ system, prompt, tool, maxSearches = 8, maxFetches = 4,
         return { data: await keepWorkingLinks(parseJson(r.text)), usage: { ...r.usage, provider: "gemini" } };
       }
       if (p === "groq") {
-        const r = await groq({ system: sys, prompt: schemaPrompt(prompt, tool), model: GROQ_SEARCH(), search: true, maxTokens: 8000 });
+        const r = await groq({ system: sys, prompt: schemaPrompt(prompt, tool), models: GROQ_SEARCH_CHAIN(), search: true, maxTokens: 8000 });
         return { data: await keepWorkingLinks(parseJson(r.text)), usage: { ...r.usage, provider: "groq" } };
       }
       if (p === "mistral") continue; // sem pesquisa na web: inventaria preços e links
@@ -264,14 +282,20 @@ async function askJson({ prompt, images = [], tier = "default", fake }) {
   const quick = tier === "quick";
   let last;
   for (const p of list) {
-    if (p === "groq" && images.length) continue; // o modelo de texto do Groq não lê fotos
+    // O Groq não lê fotos. Se as IAs que leem fotos falharam, os pedidos que não dependem só da foto
+    // (Ateliê, conversa, manutenção) seguem pelo texto e a resposta avisa que a foto não foi vista.
+    // O cadastro por foto (tier "complex") nunca segue sem a foto: inventaria o relógio.
+    if (p === "groq" && images.length && tier === "complex") continue;
+    const groqPrompt = images.length
+      ? prompt + "\n\n(A foto anexada não pôde ser vista agora. Responda só com o que está escrito acima, sem descrever a foto, e diga em uma frase que não deu para ver a imagem.)"
+      : prompt;
     try {
       if (p === "gemini") {
         const r = await gemini({ system: BASE_SYSTEM, prompt, images, models: quick ? GEMINI_QUICK_CHAIN() : GEMINI_CHAIN(), json: true });
         return { data: parseJson(r.text), usage: { ...r.usage, provider: "gemini" } };
       }
       if (p === "groq") {
-        const r = await groq({ system: BASE_SYSTEM, prompt, model: GROQ_MODEL(), json: true });
+        const r = await groq({ system: BASE_SYSTEM, prompt: groqPrompt, models: GROQ_TEXT_CHAIN(), json: true });
         return { data: parseJson(r.text), usage: { ...r.usage, provider: "groq" } };
       }
       if (p === "mistral") {
