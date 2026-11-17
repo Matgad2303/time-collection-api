@@ -104,7 +104,7 @@ async function gemini({ system, prompt, images = [], models, search = false, jso
   for (const model of models) {
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-      const d = await postJson(url, body, { "x-goog-api-key": process.env.GEMINI_API_KEY }, search ? 90000 : 60000);
+      const d = await postJson(url, body, { "x-goog-api-key": process.env.GEMINI_API_KEY }, search ? 90000 : 30000);
       const cand = (d.candidates || [])[0];
       if (!cand) throw new AiError("Gemini não respondeu" + (d.promptFeedback?.blockReason ? ` (${d.promptFeedback.blockReason})` : ""));
       const text = (cand.content?.parts || []).map((p) => p.text || "").join("");
