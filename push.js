@@ -47,10 +47,18 @@ router.get("/mine", requireAuth, wrap(async (req, res) => {
   res.json({ devices: r.n });
 }));
 
+// Aviso de teste só para os aparelhos da própria pessoa (botão "Testar aviso" no NEWS FLEX)
+router.post("/test", requireAuth, require("./http").rateLimit({ windowMs: 60 * 60 * 1000, max: 5 }), wrap(async (req, res) => {
+  const r = await sendAll("news", { title: "NEWS FLEX", body: "Teste de aviso: é assim que a edição de segunda vai chegar.", url: "/#news", tag: "news-teste" }, req.user.id);
+  res.json(r);
+}));
+
 // Envia para todos os inscritos num tópico. Endereços que o navegador já descartou (404/410) são apagados.
-async function sendAll(topic, payload) {
+async function sendAll(topic, payload, userId = null) {
   if (!setup()) return { sent: 0, skipped: "sem chaves VAPID" };
-  const subs = await query(`select id, endpoint, p256dh, auth from push_subscriptions where $1 = any(topics)`, [topic]);
+  const subs = userId
+    ? await query(`select id, endpoint, p256dh, auth from push_subscriptions where user_id=$1`, [userId])
+    : await query(`select id, endpoint, p256dh, auth from push_subscriptions where $1 = any(topics)`, [topic]);
   let sent = 0, gone = 0, failed = 0;
   const body = JSON.stringify(payload);
   for (const s of subs) {
