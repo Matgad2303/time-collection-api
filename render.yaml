@@ -15,7 +15,12 @@ services:
         generateValue: true
       - key: CORS_ORIGIN
         sync: false
-      # Agentes de IA (Caçador, Radar, NEWS FLEX). Sem a chave, o app funciona e os agentes ficam desligados.
+      # IA (Caçador, Deixar avisado, NEWS FLEX e a IA do app). Ordem: Gemini (grátis) → Groq (grátis) → Claude (pago).
+      # Sem nenhuma chave, o app funciona e a IA fica desligada.
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
       # Usos da IA do app por pessoa por dia (controla o custo)

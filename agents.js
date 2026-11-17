@@ -311,7 +311,7 @@ const enabled = () => aiEnabled() && process.env.AGENTS_DISABLED !== "true";
 
 // Pedidos: na hora e a cada 2 min; NEWS FLEX conferido na partida e a cada 10 min (sai na segunda às 7h)
 function startAgents() {
-  if (!enabled()) { log("desligados (configure ANTHROPIC_API_KEY para ligar)"); return; }
+  if (!enabled()) { log("desligados (configure GEMINI_API_KEY, GROQ_API_KEY ou ANTHROPIC_API_KEY para ligar)"); return; }
   log("ligados");
   setTimeout(() => tick({ weekly: true }), 10_000).unref();
   setInterval(() => tick(), 2 * 60 * 1000).unref();

@@ -6,7 +6,7 @@ const bcrypt = require("bcryptjs");
 const { query, one } = require("./db");
 const { wrap, need, HttpError, pick } = require("./http");
 const { requireAuth } = require("./authlib");
-const { aiEnabled, MODEL, FAKE } = require("./ai");
+const { aiEnabled, MODEL, FAKE, providers } = require("./ai");
 const agents = require("./agents");
 
 // Confere no banco a cada chamada (tirar o admin vale na hora, sem esperar o token expirar)
@@ -40,7 +40,7 @@ router.get("/overview", wrap(async (_req, res) => {
     users, users_last_7_days: users7, watches, communities, posts, promos,
     feedback: Object.fromEntries(feedback.map((r) => [r.status, r.n])),
     hunts: Object.fromEntries(hunts.map((r) => [r.status, r.n])),
-    ai: { enabled: aiEnabled(), fake: FAKE, model: MODEL, last_30_days: ai30,
+    ai: { enabled: aiEnabled(), fake: FAKE, model: providers()[0] === "claude" ? MODEL : (providers()[0] || MODEL), providers: providers(), last_30_days: ai30,
       current_edition: agents.currentEdition(), last_news_edition: lastNews.edition },
   });
 }));
@@ -88,12 +88,12 @@ router.get("/agent-runs", wrap(async (_req, res) => {
 }));
 
 router.post("/agents/news", wrap(async (req, res) => {
-  if (!aiEnabled()) throw new HttpError(400, "Agentes desligados: configure ANTHROPIC_API_KEY.");
+  if (!aiEnabled()) throw new HttpError(400, "Agentes desligados: configure GEMINI_API_KEY (grátis).");
   res.json(await agents.runNews({ force: Boolean(req.body.force) }));
 }));
 
 router.post("/agents/hunts", wrap(async (_req, res) => {
-  if (!aiEnabled()) throw new HttpError(400, "Agentes desligados: configure ANTHROPIC_API_KEY.");
+  if (!aiEnabled()) throw new HttpError(400, "Agentes desligados: configure GEMINI_API_KEY (grátis).");
   res.json({ processed: await agents.processHunts() });
 }));
 

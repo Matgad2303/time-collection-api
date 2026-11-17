@@ -5,14 +5,14 @@ const router = require("express").Router();
 const { one, query } = require("./db");
 const { wrap, need, HttpError } = require("./http");
 const { requireAuth } = require("./authlib");
-const { askJson, aiEnabled } = require("./ai");
+const { askJson, aiEnabled, providers } = require("./ai");
 
 const PER_DAY = Number(process.env.AI_PER_DAY || 40);
 
 router.use(requireAuth);
 
 // O app pergunta se a IA está ligada e se aceita fotos
-router.get("/limits", (_req, res) => res.json({ enabled: aiEnabled(), images: true, perDay: PER_DAY }));
+router.get("/limits", (_req, res) => res.json({ enabled: aiEnabled(), images: providers().some((p) => p !== "groq") || process.env.AI_FAKE === "true", perDay: PER_DAY }));
 
 router.post("/json", wrap(async (req, res) => {
   if (!aiEnabled()) throw new HttpError(503, "A IA do app ainda não está ligada.");

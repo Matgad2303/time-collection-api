@@ -97,3 +97,13 @@ O site já funciona como app instalável (PWA). Para aparecer nas lojas:
 - O que vai para o Sentry: erros 500 da API (com a rota e o id do usuário) e falhas dos agentes. Não vai corpo de requisição, cabeçalho, cookie nem IP (`monitor.js`).
 - Um monitor de uptime do Sentry chama `/health` a cada 10 min. Isso também mantém a API grátis do Render acordada (ela dorme após 15 min parada).
 
+## IA grátis (desde 17/11/2026)
+A API tenta, nesta ordem, o primeiro provedor que tiver chave:
+1. **Gemini** (`GEMINI_API_KEY`): grátis, sem cartão. Em aistudio.google.com → *Get API key* → *Create API key*. Lê fotos e pesquisa no Google (Caçador, Deixar avisado, NEWS FLEX).
+2. **Groq** (`GROQ_API_KEY`): grátis, sem cartão. Em console.groq.com → *API Keys*. Reserva: texto e pesquisa web (modelo `groq/compound`); não lê fotos.
+3. **Claude** (`ANTHROPIC_API_KEY`): pago, opcional; só entra se os grátis falharem.
+
+Os links que a IA devolve (anúncios e notícias) são conferidos pela API antes de aparecer no app; os que não abrem são descartados.
+No plano grátis do Google o conteúdo enviado pode ser usado para melhorar os produtos dele; a API não envia nome, e-mail, WhatsApp nem senha.
+Limites grátis mudam com o tempo: conferir em aistudio.google.com (*Rate limits*) e console.groq.com (*Limits*).
+

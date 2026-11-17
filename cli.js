@@ -49,9 +49,9 @@ const commands = {
     console.log(await require("./agents").processHunts());
   },
   async "testar-ia"() {
-    const { research, aiEnabled, MODEL, FAKE } = require("./ai");
-    if (!aiEnabled()) throw new Error("Configure ANTHROPIC_API_KEY no .env para testar.");
-    console.log(`Testando ${FAKE ? "em modo de teste (AI_FAKE)" : MODEL}... pode levar 1 a 3 minutos.`);
+    const { research, aiEnabled, MODEL, FAKE, providers } = require("./ai");
+    if (!aiEnabled()) throw new Error("Configure GEMINI_API_KEY (grátis) no .env para testar.");
+    console.log(`Testando ${FAKE ? "em modo de teste (AI_FAKE)" : providers().join(" → ")}... pode levar 1 a 3 minutos.`);
     const agents = require("./agents");
     const t = Date.now();
     const { data, usage } = await research({
