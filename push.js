@@ -11,7 +11,7 @@ const enabled = () => Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_
 let configured = false;
 function setup() {
   if (configured || !enabled()) return enabled();
-  webpush.setVapidDetails(process.env.VAPID_SUBJECT || "mailto:contato@timecollection.app", process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
+  webpush.setVapidDetails(process.env.VAPID_SUBJECT || "https://time-collection-web-kn9s.onrender.com", process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
   configured = true;
   return true;
 }
