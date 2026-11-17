@@ -3,7 +3,8 @@
 // Ordem de tentativa (usa o primeiro que tiver chave e responder):
 //   1. Gemini (Google AI Studio)  — grátis com limite diário; lê fotos e pesquisa no Google
 //   2. Groq                       — grátis com limite diário; texto, e pesquisa web no modelo "groq/compound"
-//   3. Claude (Anthropic)         — pago; só entra se ANTHROPIC_API_KEY existir
+//   3. Mistral                    — grátis (plano Experiment); texto e fotos, sem pesquisa na web
+//   4. Claude (Anthropic)         — pago; só entra se ANTHROPIC_API_KEY existir
 //
 // Variáveis de ambiente:
 //   GEMINI_API_KEY      liga o Gemini (aistudio.google.com > Get API key; sem cartão)
@@ -12,6 +13,8 @@
 //   GROQ_API_KEY        liga o Groq (console.groq.com > API Keys; sem cartão)
 //   GROQ_MODEL          modelo de texto (padrão openai/gpt-oss-120b)
 //   GROQ_SEARCH_MODEL   modelo que pesquisa na web com a ferramenta browser_search (padrão openai/gpt-oss-120b)
+//   MISTRAL_API_KEY     liga o Mistral (console.mistral.ai > API Keys; plano grátis, sem cartão)
+//   MISTRAL_MODEL       modelo do Mistral (padrão mistral-small-latest, lê fotos)
 //   ANTHROPIC_API_KEY   liga o Claude (pago), usado só se os grátis falharem
 //   AI_MODEL / AI_MODEL_QUICK / AI_EFFORT   modelos e esforço do Claude
 //   AI_FAKE=true        modo de teste: devolve dados de exemplo sem chamar nenhuma IA
@@ -29,15 +32,17 @@ const FAKE = process.env.AI_FAKE === "true";
 const GEMINI_MODEL = () => process.env.GEMINI_MODEL || "gemini-flash-latest";
 const GEMINI_QUICK = () => process.env.GEMINI_MODEL_QUICK || "gemini-flash-lite-latest";
 const GROQ_MODEL = () => process.env.GROQ_MODEL || "openai/gpt-oss-120b";
+const MISTRAL_MODEL = () => process.env.MISTRAL_MODEL || "mistral-small-latest";
 const GROQ_SEARCH = () => process.env.GROQ_SEARCH_MODEL || "openai/gpt-oss-120b";
 
 const has = {
   gemini: () => Boolean(process.env.GEMINI_API_KEY),
   groq: () => Boolean(process.env.GROQ_API_KEY),
+  mistral: () => Boolean(process.env.MISTRAL_API_KEY),
   claude: () => Boolean(process.env.ANTHROPIC_API_KEY),
 };
-const aiEnabled = () => FAKE || has.gemini() || has.groq() || has.claude();
-const providers = () => ["gemini", "groq", "claude"].filter((p) => has[p]());
+const aiEnabled = () => FAKE || has.gemini() || has.groq() || has.mistral() || has.claude();
+const providers = () => ["gemini", "groq", "mistral", "claude"].filter((p) => has[p]());
 
 let client = null;
 const getClient = () => (client ||= new Anthropic({ maxRetries: 3, timeout: 10 * 60 * 1000 }));
@@ -137,6 +142,25 @@ async function groq({ system, prompt, model, json = false, search = false, maxTo
   return { text, usage: { input_tokens: d.usage?.prompt_tokens || 0, output_tokens: d.usage?.completion_tokens || 0, searches: 0 } };
 }
 
+// ---------- Mistral (reserva grátis; lê fotos, não pesquisa na web) ----------
+async function mistral({ system, prompt, images = [], model, json = false, maxTokens = 8192 }) {
+  const content = [
+    ...images.slice(0, 8).map((im) => ({ type: "image_url", image_url: `data:${im.media_type};base64,${im.data}` })),
+    { type: "text", text: prompt },
+  ];
+  const body = {
+    model,
+    max_tokens: maxTokens,
+    temperature: 0.4,
+    messages: [{ role: "system", content: system }, { role: "user", content }],
+    ...(json ? { response_format: { type: "json_object" } } : {}),
+  };
+  const d = await postJson("https://api.mistral.ai/v1/chat/completions", body, { Authorization: `Bearer ${process.env.MISTRAL_API_KEY}` }, 90000);
+  const text = d.choices?.[0]?.message?.content || "";
+  if (!String(text).trim()) throw new AiError("Mistral respondeu vazio");
+  return { text, usage: { input_tokens: d.usage?.prompt_tokens || 0, output_tokens: d.usage?.completion_tokens || 0, searches: 0, model } };
+}
+
 // ---------- Links: só fica o que abre de verdade ----------
 // IA grátis pode errar o endereço de um anúncio ou notícia. Antes de mostrar, a API confere se o link abre.
 async function linkOk(u) {
@@ -173,7 +197,7 @@ ${JSON.stringify(tool.input_schema)}`;
 async function research({ system, prompt, tool, maxSearches = 8, maxFetches = 4, fake }) {
   if (FAKE) return { data: fake(), usage: { input_tokens: 0, output_tokens: 0, searches: 0 } };
   const list = providers();
-  if (!list.length) throw new AiError("Nenhuma chave de IA configurada (GEMINI_API_KEY, GROQ_API_KEY ou ANTHROPIC_API_KEY)");
+  if (!list.length) throw new AiError("Nenhuma chave de IA configurada (GEMINI_API_KEY, GROQ_API_KEY, MISTRAL_API_KEY ou ANTHROPIC_API_KEY)");
   const sys = system.replace(/chamando a ferramenta \w+/gi, "respondendo com o JSON pedido").replace(/a ferramenta \w+/gi, "o JSON pedido");
   let last;
   for (const p of list) {
@@ -187,6 +211,7 @@ async function research({ system, prompt, tool, maxSearches = 8, maxFetches = 4,
         const r = await groq({ system: sys, prompt: schemaPrompt(prompt, tool), model: GROQ_SEARCH(), search: true, maxTokens: 8000 });
         return { data: await keepWorkingLinks(parseJson(r.text)), usage: { ...r.usage, provider: "groq" } };
       }
+      if (p === "mistral") continue; // sem pesquisa na web: inventaria preços e links
       return await researchClaude({ system, prompt, tool, maxSearches, maxFetches });
     } catch (e) {
       last = e;
@@ -235,7 +260,7 @@ async function researchClaude({ system, prompt, tool, maxSearches, maxFetches })
 async function askJson({ prompt, images = [], tier = "default", fake }) {
   if (FAKE) return { data: fake ? fake() : { ok: true, note: "Resposta de teste (AI_FAKE)." }, usage: { input_tokens: 0, output_tokens: 0 } };
   const list = providers();
-  if (!list.length) throw new AiError("Nenhuma chave de IA configurada (GEMINI_API_KEY, GROQ_API_KEY ou ANTHROPIC_API_KEY)");
+  if (!list.length) throw new AiError("Nenhuma chave de IA configurada (GEMINI_API_KEY, GROQ_API_KEY, MISTRAL_API_KEY ou ANTHROPIC_API_KEY)");
   const quick = tier === "quick";
   let last;
   for (const p of list) {
@@ -248,6 +273,10 @@ async function askJson({ prompt, images = [], tier = "default", fake }) {
       if (p === "groq") {
         const r = await groq({ system: BASE_SYSTEM, prompt, model: GROQ_MODEL(), json: true });
         return { data: parseJson(r.text), usage: { ...r.usage, provider: "groq" } };
+      }
+      if (p === "mistral") {
+        const r = await mistral({ system: BASE_SYSTEM, prompt, images, model: MISTRAL_MODEL(), json: true });
+        return { data: parseJson(r.text), usage: { ...r.usage, provider: "mistral" } };
       }
       return await askClaude({ prompt, images, tier });
     } catch (e) {
