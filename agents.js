@@ -281,6 +281,18 @@ async function runNews({ force = false } = {}) {
     const eds = await query(`select data->>'edition' e from docs where path='news' and id like 'edition-%' order by id desc offset 8`);
     for (const e of eds) await query(`delete from docs where path='news' and data->>'edition' = $1`, [e.e]);
     await recordRun("news", edition, "ok", `${items.length} notícia(s)`, usage, startedAt);
+    // Aviso no celular de quem pediu: saiu a edição da semana
+    if (items.length && !force) {
+      try {
+        const lead = items.find((n) => n.lead) || items[0];
+        const r = await require("./push").sendAll("news", {
+          title: `NEWS FLEX · Edição nº ${number}`,
+          body: text(lead.title, 140) || "A edição da semana chegou.",
+          url: "/#news", tag: "news-" + edition,
+        });
+        log(`news: aviso no celular enviado para ${r.sent || 0} aparelho(s)`);
+      } catch (e) { console.warn("[agentes] aviso do news falhou", e.message); }
+    }
     log(`news: edição ${edition} com ${items.length} notícia(s)`);
     return { edition, count: items.length };
   } catch (e) {
