@@ -30,6 +30,7 @@ app.use("/docs", require("./docs").router);
 app.use("/ia", require("./ia"));
 app.use("/feedback", require("./feedback"));
 app.use("/push", require("./push").router);
+app.use("/friends", require("./friends"));
 app.use("/admin", require("./admin"));
 
 app.use((_req, res) => res.status(404).json({ error: "Rota não encontrada." }));
