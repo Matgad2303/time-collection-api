@@ -63,6 +63,7 @@ if (require.main === module) {
   const port = process.env.PORT || 3001;
   const server = app.listen(port, () => console.log(`Time Collection API na porta ${port}`));
   require("./agents").startAgents();
+  require("./backup").startBackups();
   // Desligamento limpo quando o Render reinicia o serviço
   process.on("SIGTERM", () => server.close(() => pool.end().then(() => process.exit(0))));
 }

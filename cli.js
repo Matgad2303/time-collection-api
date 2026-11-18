@@ -6,6 +6,8 @@
 //   npm run agente:cacador                  processa agora os pedidos pendentes do caçador
 //   npm run agente:news                     gera agora a edição da semana do NEWS FLEX (se ainda não existe)
 //   npm run importar -- arquivo.json email  importa a coleção exportada do protótipo para uma conta
+//   npm run backup                          faz agora a cópia de segurança e manda para o GitHub
+//   npm run backup:restaurar -- arq.tcbk    mostra o que tem na cópia; com --aplicar, regrava o banco com ela
 //   npm run testar-ia                       faz uma busca real de teste (sem gravar nada) e mostra o custo
 require("dotenv").config();
 const crypto = require("crypto");
@@ -16,6 +18,22 @@ const KIND = { bug: "Problema", idea: "Ideia", account: "Conta", other: "Outro" 
 const [cmd, arg] = process.argv.slice(2);
 
 const commands = {
+  async backup() {
+    const r = await require("./backup").runBackup();
+    console.log(`Cópia de ${r.day} enviada (${(r.size / 1024).toFixed(0)} KB).`, r.counts);
+  },
+  async "backup:restaurar"() {
+    const fs = require("fs"), b = require("./backup");
+    if (!arg) return console.log("Use: npm run backup:restaurar -- arquivo.tcbk [--aplicar]");
+    const pass = process.env.BACKUP_PASSPHRASE;
+    if (!pass) return console.log("Coloque a senha da cópia em BACKUP_PASSPHRASE (no .env) antes.");
+    const data = b.openBackup(fs.readFileSync(arg), pass);
+    console.log(`Cópia feita em ${data.created_at}:`);
+    for (const [t, rows] of Object.entries(data.tables)) console.log(`  ${t}: ${rows.length}`);
+    if (!process.argv.includes("--aplicar")) return console.log("\nNada foi alterado. Para regravar o banco com esta cópia, rode de novo com --aplicar.");
+    await b.restore(data);
+    console.log("\nBanco regravado com a cópia.");
+  },
   async relatos() {
     const where = arg === "todos" ? "" : "where f.status in ('new','seen','doing')";
     const rows = await query(

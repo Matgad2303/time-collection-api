@@ -18,6 +18,8 @@
     "agente:cacador": "node cli.js agente:cacador",
     "agente:news": "node cli.js agente:news",
     "testar-ia": "node cli.js testar-ia",
+    "backup": "node cli.js backup",
+    "backup:restaurar": "node cli.js backup:restaurar",
     "importar": "node importar.js"
   },
   "dependencies": {

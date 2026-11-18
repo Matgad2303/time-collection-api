@@ -16,6 +16,17 @@ router.use(requireAuth, wrap(async (req, _res, next) => {
   next();
 }));
 
+// Cópia de segurança: situação e "fazer agora"
+router.get("/backup", wrap(async (_req, res) => {
+  const runs = await query(`select status, ref, detail, started_at from agent_runs where agent='backup' order by started_at desc limit 10`);
+  res.json({ configured: require("./backup").configured(), runs });
+}));
+router.post("/backup", wrap(async (_req, res) => {
+  const b = require("./backup");
+  if (!b.configured()) throw new HttpError(503, "A cópia de segurança ainda não está configurada.");
+  res.json(await b.runBackup());
+}));
+
 // Visão geral
 router.get("/overview", wrap(async (_req, res) => {
   const count = async (sql) => (await one(sql)).n;
