@@ -61,7 +61,11 @@ app.use((err, req, res, _next) => {
 
 if (require.main === module) {
   const port = process.env.PORT || 3001;
-  const server = app.listen(port, () => console.log(`Time Collection API na porta ${port}`));
+  const server = app.listen(port, () => {
+    console.log(`Time Collection API na porta ${port}`);
+    // Desempenho: já deixa uma conexão com o banco aberta, para a primeira tela depois de acordar não esperar por ela
+    pool.query("select 1").catch(() => {});
+  });
   require("./agents").startAgents();
   require("./backup").startBackups();
   // Desligamento limpo quando o Render reinicia o serviço
