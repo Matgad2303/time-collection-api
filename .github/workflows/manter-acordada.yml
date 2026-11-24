@@ -1,0 +1,15 @@
+# Mantém a API acordada das 7h às 24h (horário de Fortaleza), para o app não ficar em "dando corda…".
+# O Render grátis dorme após 15 min sem uso. ~527 h/mês das 750 h grátis. Custo: R$ 0 (repositório público).
+name: Manter a API acordada
+on:
+  schedule:
+    - cron: "*/10 10-23 * * *"  # 7h às 20h59 em Fortaleza (UTC-3)
+    - cron: "*/10 0-2 * * *"    # 21h às 23h59 em Fortaleza
+  workflow_dispatch:
+jobs:
+  cutucar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Chamar /health
+        run: curl -fsS --max-time 90 --retry 2 https://time-collection-api.onrender.com/health || true
